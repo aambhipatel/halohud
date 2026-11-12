@@ -25,12 +25,25 @@ The HUD targets a single screen. It uses screen-space projection: it has no true
 
 ### Install or upgrade
 
-1. Close Assetto Corsa and back up any existing `apps/lua/HaloHUD/config.ini`.
-2. Copy this project's [apps](apps/) folder into the Assetto Corsa installation root. The resulting path must be `assettocorsa/apps/lua/HaloHUD/manifest.ini`.
-3. When upgrading, replace the Lua files **and** assets, then restore your saved `config.ini`. Missing settings receive defaults.
+Close Assetto Corsa before installing. When upgrading, back up your existing `apps/lua/HaloHUD/config.ini` and restore it afterward to keep your settings. Missing settings receive defaults.
+
+#### Content Manager installation (recommended — easiest)
+
+1. Download **HaloHUD-install.zip** from the release you want to install. Use the install ZIP, not HaloHUD-complete.zip, which includes development files.
+2. Open Content Manager and select **Install from a file**.
+3. Choose `HaloHUD-install.zip`, review the detected package and complete the installation.
 4. Enable Lua apps in Content Manager if needed, start a session and open **HaloHUD controls** from the app sidebar.
 
-An install ZIP can also be dropped into Content Manager if its installer recognizes it; otherwise use the manual steps above. Do not install `docs`, `source`, `tests` or previews into the game. The app does not edit car files.
+If Content Manager does not recognize the package, use the manual method below.
+
+#### Manual installation (alternative)
+
+1. Extract `HaloHUD-install.zip`, or locate this project's [apps](apps/) folder.
+2. Copy the `apps` folder into the Assetto Corsa installation root. The resulting path must be `assettocorsa/apps/lua/HaloHUD/manifest.ini`.
+3. When upgrading, replace the Lua files **and** assets, then restore your saved `config.ini`.
+4. Enable Lua apps in Content Manager if needed, start a session and open **HaloHUD controls** from the app sidebar.
+
+Do not install `docs`, `source`, `tests` or previews into the game. The app does not edit car files.
 
 ### Position and configure the HUD
 
@@ -120,13 +133,6 @@ The Formula Ultra profile uses available live powertrain data for the exact car 
 ## Changelog
 
 Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.8.0. Documentation and publishing changes are tracked separately.
-
-### Unreleased — documentation and publication preparation
-
-- Renamed the public-facing project to **HaloHUD for Assetto Corsa**, with an unofficial-project description and affiliation disclaimer.
-- Organized the release into app, documentation, camera, source, test, preview and report folders.
-- Reworked the README and added a contribution guide, preserving detailed configuration and history in the user guide.
-- Removed a personal installation path and Python cache files. Added Git ignore rules and package exclusions for local files, credentials and Git metadata.
 
 ### 1.8.0 — curved gauges and battery contrast
 
