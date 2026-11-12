@@ -15,6 +15,31 @@
     "height": 64
   },
   {
+    "file": "assets/curved_energy_fill.png",
+    "width": 640,
+    "height": 320
+  },
+  {
+    "file": "assets/curved_energy_rim.png",
+    "width": 640,
+    "height": 320
+  },
+  {
+    "file": "assets/curved_pedal_fill.png",
+    "width": 640,
+    "height": 320
+  },
+  {
+    "file": "assets/curved_pedal_rim.png",
+    "width": 640,
+    "height": 320
+  },
+  {
+    "file": "assets/curved_pedal_segments.png",
+    "width": 640,
+    "height": 320
+  },
+  {
     "file": "assets/dial_fill.png",
     "width": 360,
     "height": 360

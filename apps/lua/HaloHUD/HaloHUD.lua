@@ -1,4 +1,4 @@
--- HaloHUD for Assetto Corsa 1.7.0, original screen-space artwork. CSP 0.2.0+ (build 2651).
+-- HaloHUD for Assetto Corsa 1.8.0, original screen-space artwork. CSP 0.2.0+ (build 2651).
 -- Required UI/telemetry calls were checked against the shipped 0.2.0 SDK.
 local Telemetry=require('telemetry')
 local Settings=require('settings')
@@ -147,7 +147,7 @@ function script.windowMain()
   if not cfg then
     ui.textWrapped(errorMessage or 'HaloHUD is loading.'); return
   end
-  ui.text('HaloHUD for Assetto Corsa 1.7.0')
+  ui.text('HaloHUD for Assetto Corsa 1.8.0')
   if ui.checkbox('Show HUD',enabled) then enabled=not enabled; markDirty() end
   if ui.checkbox('Force demo telemetry',forceDemo) then
     forceDemo=not forceDemo; cfg.demo=forceDemo and 'ON' or 'AUTO'; markDirty()

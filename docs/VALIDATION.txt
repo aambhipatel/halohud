@@ -34,3 +34,8 @@ PASS 1.6: approved red brakes, solid battery silhouette without outline, P1 abov
 PASS 1.7: optional mouse drag handle, actual fitted-scale conversion, first-click stability, edge clamp/reversal, offset autosave, edit mode toggle/Reset and Ctrl+H hiding. All 52 offline tests and SDK inventory pass. Existing 20 assets unchanged. In-game mouse integration remains pending.
 
 Organized release: all 87 original distributable files accounted for (source listing and checksums regenerated separately). App/runtime files preserved byte-for-byte. Updated generator, preview and test paths for previews/, docs/ and reports/. All 52 tests rerun in the organized hierarchy; ZIP CRC and all 20 runtime asset dimensions verified.
+
+
+PASS 1.8.0 (2026-11-12): approved curved pedal/energy layout integrated into Lua. Equal-length 16-segment pedal masks, continuous bottom-up energy crops, close-fitting frames, lower labels and tighter DEPLOY lettering. High-contrast battery empty/fill colors. 56 offline tests pass, including a seam-free energy-mask regression and existing extreme scales/offsets, mouse positioning, telemetry, saving and visibility coverage.
+PASS: all 25 PNG assets and glyph metadata regenerated. Actual Lua draw-stream previews, solo/race/scaled layouts, aero contact sheet and browser demo regenerated. Final reference render visually inspected: 359 quads. SDK inventory passes with no new CSP API calls. In-game integration and total CPU/GPU frame-time target remain pending.
+Packaging: release archives now generated inside dist/ to keep all project changes in the selected folder. Git/local-file exclusion rules retained.

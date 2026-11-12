@@ -1,6 +1,6 @@
 # HaloHUD for Assetto Corsa
 
-**Version 1.7.0 · Assetto Corsa + CSP · MIT**
+**Version 1.8.0 · Assetto Corsa + CSP · MIT**
 
 An unofficial, F1-inspired onboard telemetry overlay for Assetto Corsa. It draws a curved teal-and-navy HUD around the cockpit view using a CSP Lua app and original artwork.
 
@@ -68,7 +68,7 @@ python -m venv ../halohud-venv
 ..\halohud-venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-The test harness executes Lua 5.1 through Lupa and mocks CSP interfaces. The current suite has 52 tests; it does not prove native mouse routing, engine integration or GPU performance.
+The test harness executes Lua 5.1 through Lupa and mocks CSP interfaces. The current suite has 56 tests; it does not prove native mouse routing, engine integration or GPU performance.
 
 ### Generate assets, previews and packages
 
@@ -83,7 +83,7 @@ The virtual environment is kept outside the project so it is excluded from relea
 ..\halohud-venv\Scripts\python.exe source/build_package.py
 ```
 
-Asset generation refreshes PNGs and glyph metadata. The package builder refreshes the source listing and SHA-256 inventory, verifies ZIP CRCs and asset dimensions, and writes install/complete ZIPs beside this project folder.
+Asset generation refreshes PNGs and glyph metadata. The package builder refreshes the source listing and SHA-256 inventory, verifies ZIP CRCs and asset dimensions, and writes install/complete ZIPs into `dist/` inside this project folder.
 
 If you have CSP's generated SDK, verify declarations separately:
 
@@ -119,7 +119,7 @@ The Formula Ultra profile uses available live powertrain data for the exact car 
 
 ## Changelog
 
-Entries follow the development history. Dates are omitted where a release date was not recorded. The app manifest remains at 1.7.0; later documentation and publishing changes are listed separately.
+Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.8.0. Documentation and publishing changes are tracked separately.
 
 ### Unreleased — documentation and publication preparation
 
@@ -127,6 +127,15 @@ Entries follow the development history. Dates are omitted where a release date w
 - Organized the release into app, documentation, camera, source, test, preview and report folders.
 - Reworked the README and added a contribution guide, preserving detailed configuration and history in the user guide.
 - Removed a personal installation path and Python cache files. Added Git ignore rules and package exclusions for local files, credentials and Git metadata.
+
+### 1.8.0 — curved gauges and battery contrast
+
+- Integrated the approved HTML gauge layout into the Lua app: RECHARGE and DEPLOY now curve around and closely follow the speedometer rim.
+- Kept blue energy fills continuous and bottom-up, with the existing telemetry formulas and damping. Tightened DEPLOY letter spacing.
+- Gave brake/throttle gauges curved inner contours, fitted borders with small corners, and 16 equal-length segments. Their outer contours adjust to preserve segment length.
+- Moved BRAKE and THROTTLE labels just below the gauges.
+- Made depleted battery charge dark navy and remaining charge bright cyan for clearer visibility against gray liveries, retaining the battery shape and lightning icon without an outer border.
+- Added reproducible curved-gauge texture generation and regression checks; retained live sizing, dragging, saved configuration and Ctrl+H behavior.
 
 ### 1.7.0 — mouse positioning
 
@@ -209,7 +218,7 @@ Contributions to telemetry handling, layouts, verified car profiles, documentati
 
 ## License
 
-Original code and artwork are covered by the [MIT license](LICENSE.txt). Bundled fonts retain their separate [Orbitron OFL](source/fonts/Orbitron-OFL.txt) and [Barlow Condensed OFL](source/fonts/BarlowCondensed-OFL.txt) licenses.
+Original code and artwork are covered by the [MIT license](LICENSE). Bundled fonts retain their separate [Orbitron OFL](source/fonts/Orbitron-OFL.txt) and [Barlow Condensed OFL](source/fonts/BarlowCondensed-OFL.txt) licenses.
 
 ## Affiliation
 

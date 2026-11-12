@@ -198,3 +198,10 @@ Earlier CLEAR TRACK race behavior and battery-outline descriptions are historica
 - [ ] Turn edit mode off: no handle/input capture. Ctrl+H hides HUD and handle; showing it does not resume a stale drag. Reset ends edit mode. Startup begins with edit mode off.
 
 Mouse tests use an input mock, so actual CSP mouse capture, UI scaling and click routing remain in-game checks.
+
+
+## Curved gauges and battery contrast (1.8.0)
+
+- Offline: 56 tests cover equal-length pedal masks, bottom-up segment order, continuous empty/half/full energy fills, distinct battery colors/cropping, and existing scale/drag/visibility/telemetry regressions.
+- In game: check the close energy/dial gap, fitted pedal borders, lower labels and DEPLOY spacing at normal and extreme dial/module scales. Verify brake/throttle, recharge/deploy and battery at 0/50/100% against live telemetry.
+- Check the depleted/charged battery contrast over gray and bright liveries. Check Ctrl+H and drag positioning. Measure warmed-up CPU/GPU frame time; performance and native integration remain unverified offline.

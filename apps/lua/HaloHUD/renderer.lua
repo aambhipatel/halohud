@@ -31,6 +31,12 @@ function M.new(cfg, width, height)
   end
   local function localPoint(u,v,flat,group)
     group=group or region(u,flat)
+    if group=='curvedModule' then
+      -- Keep gauge radii centered on the dial, independent of halo curvature.
+      local r=math.sqrt(u*u+v*v)
+      local k=(180*ds+(r-180)*ms)/r
+      return u*k,v*k
+    end
     if group=='dial' then u=u*ds; v=v*ds
     elseif group=='module' then
       u=(u<0 and -1 or 1)*(inner+(math.abs(u)-175)*ms); v=v*ms
@@ -51,7 +57,7 @@ function M.new(cfg, width, height)
     minY=math.min(minY,y);maxY=math.max(maxY,y)
   end
   for _,r in ipairs({{-840,-318,-145,130,'left'}, {318,840,-100,130,'right'},
-      {-308,-175,-100,125,'module'}, {175,308,-100,125,'module'},
+      {-310,-160,-150,150,'curvedModule'}, {160,310,-150,150,'curvedModule'},
       {-184,184,-205,230,'dial'}}) do
     for i=0,64 do for _,v in ipairs({r[3],r[4]}) do
       bounds(r[1]+(r[2]-r[1])*i/64,v,r[5]=='dial',r[5])
@@ -100,9 +106,10 @@ function M.new(cfg, width, height)
 
   -- Text meshes are cached by complete string and location. The cache is bounded
   -- and reset in one small batch to avoid unbounded growth in long sessions.
-  function self.text(str,u,v,size,color,style,align,maxWidth,flat,tracking)
+  function self.text(str,u,v,size,color,style,align,maxWidth,flat,tracking,group)
+    group=group or region(u,flat)
     str=tostring(str); style=style or 'labels'; tracking=tracking or 1
-    local key=table.concat({str,u,v,size,style,align or '',maxWidth or 0,flat and 1 or 0,tracking},'|')
+    local key=table.concat({str,u,v,size,style,align or '',maxWidth or 0,flat and 1 or 0,tracking,group},'|')
     local mesh=self.textCache[key]
     if not mesh then
       local font=glyphs[style]; local scale=size/font.cap; local width=0
@@ -119,7 +126,7 @@ function M.new(cfg, width, height)
       for i=1,#str do
         local g=font.glyphs[tostring(str:byte(i))] or font.glyphs['63']
         if str:byte(i)~=32 then
-          mesh[#mesh+1]=self.quad(x+g.x*scale,v+(g.y+font.cap)*scale,g.w*scale,g.h*scale,font.texture,g.uv,flat,region(u,flat))
+          mesh[#mesh+1]=self.quad(x+g.x*scale,v+(g.y+font.cap)*scale,g.w*scale,g.h*scale,font.texture,g.uv,flat,group)
         end
         x=x+g.advance*scale+tracking
       end
@@ -129,9 +136,23 @@ function M.new(cfg, width, height)
     for i=1,#mesh do self.draw(mesh[i],color) end
   end
 
-  -- Vertical labels follow the ribbon; letters are stacked as in the reference.
-  local function vertical(text,u,v)
-    for i=1,#text do self.text(text:sub(i,i),u,v+(i-1)*16,10,self.c.white,nil,'center') end
+  -- All gauge artwork shares a 640x320 design atlas centered at (0,0).
+  -- Crop UVs instead of stretching a shorter fill; outlines retain their shape.
+  local function gaugeQuad(side,top,bottom,texture)
+    local u=side==1 and -310 or 160
+    return self.quad(u,top,150,bottom-top,texture,
+      {(u+320)/640,(top+160)/320,(u+470)/640,(bottom+160)/320},false,'curvedModule')
+  end
+  local function energyLabels()
+    for side,label in ipairs({'RECHARGE','DEPLOY'}) do
+      local sign=side==1 and -1 or 1
+      local span=side==1 and 44 or 26
+      for i=1,#label do
+        local a=math.rad(-span/2+span*(i-1)/(#label-1))
+        self.text(label:sub(i,i),sign*206*math.cos(a),206*math.sin(a)-4,
+          10,self.c.white,nil,'center',nil,false,1,'curvedModule')
+      end
+    end
   end
 
   -- Capture static draw calls once: no extra canvas allocation, shader compilation,
@@ -143,15 +164,14 @@ function M.new(cfg, width, height)
   self.image('assets/left_rim.png',-830,-92,512,192,c.accent,false,n)
   self.image('assets/right_fill.png',318,-92,512,192,c.glass,false,n)
   self.image('assets/right_rim.png',318,-92,512,192,c.accent,false,n)
-  for _,u in ipairs({-308,222}) do
-    self.image('assets/module_fill.png',u,-96,86,192,c.glass,false,3)
-    self.image('assets/module_rim.png',u,-96,86,192,c.accent,false,3)
+  for side=1,2 do
+    self.draw(gaugeQuad(side,-150,150,'assets/curved_pedal_fill.png'),rgba({18,52,66},opacity))
+    self.draw(gaugeQuad(side,-150,150,'assets/curved_pedal_rim.png'),c.accent)
+    self.draw(gaugeQuad(side,-150,150,'assets/curved_energy_rim.png'),rgba({50,150,194},opacity))
+    self.draw(gaugeQuad(side,-150,150,'assets/curved_energy_fill.png'),rgba({10,50,112},opacity))
   end
-  self.image('assets/tab.png',-222,-91,47,182,rgba({12,48,104},opacity),false,2)
-  self.image('assets/tab.png',175,-91,47,182,rgba({12,48,104},opacity),false,2)
-  -- Energy labels are drawn after their dynamic fills.
-  self.text('BRAKE',-267,105,12,c.dim,nil,'center')
-  self.text('THROTTLE',267,105,12,c.dim,nil,'center')
+  self.text('BRAKE',-246,127,12,c.dim,nil,'center',nil,false,1,'curvedModule')
+  self.text('THROTTLE',246,127,12,c.dim,nil,'center',nil,false,1,'curvedModule')
   self.image('assets/dial_fill.png',-180,-180,360,360,c.glass,true)
   self.image('assets/dial_rim.png',-180,-180,360,360,c.accent,true)
   self.text('ACTIVE',347,-62,12,c.white)
@@ -182,9 +202,12 @@ function M.new(cfg, width, height)
   end
 
   self.pedals={}; self.rpm={}; self.gears={}
-  for side,u in ipairs({-294,237}) do
+  for side=1,2 do
     self.pedals[side]={}
-    for i=1,PEDAL_SEGMENTS do self.pedals[side][i]=self.quad(u,76-i*9.5,57,7) end
+    for i=1,PEDAL_SEGMENTS do
+      local bottom=110-(i-1)*220/PEDAL_SEGMENTS
+      self.pedals[side][i]=gaugeQuad(side,bottom-220/PEDAL_SEGMENTS+2,bottom,'assets/curved_pedal_segments.png')
+    end
   end
   for i=1,48 do self.rpm[i]=self.quad(430+(i-1)*7.5,46,7.7,5) end
   local gearCount=math.max(1,math.min(12,cfg.gearCount or 8))
@@ -205,19 +228,15 @@ function M.new(cfg, width, height)
         if f>0 then self.draw(self.pedals[side][i],side==1 and c.brake or c.green,f) end
       end
     end
-    -- Crop the original rounded mask, never stretch it to the fill height.
-    -- One continuous field with a flat moving surface and rounded bottom corners.
+    -- Continuous bottom-up fill inside the rounded energy mask.
+    local top=-206*math.sin(math.rad(27))-23
+    local bottom=-top
     for side,value in ipairs({t.recharge or 0,t.deploy or 0}) do
       value=math.max(0,math.min(1,value))
-      local u=side==1 and -222 or 175
-      if value>0 then
-        for j=0,1 do
-          self.draw(self.quad(u+47*j/2,-91+182*(1-value),47/2,182*value,
-            'assets/tab_fill.png',{j/2,1-value,(j+1)/2,1}),rgba({70,180,255},opacity))
-        end
-      end
+      if value>0 then self.draw(gaugeQuad(side,bottom-(bottom-top)*value,bottom,
+        'assets/curved_energy_fill.png'),rgba({70,180,255},opacity)) end
     end
-    vertical('RECHARGE',-198,-66); vertical('DEPLOY',198,-42)
+    energyLabels()
     local kmh=math.floor(t.speed+0.5); local mph=math.floor(t.speed*0.6213711922+0.5)
     local mphFirst=cfg.units=='MPH'
     self.text(mphFirst and 'MPH' or 'KM/H',0,-127,13,c.white,nil,'center',nil,true)
@@ -246,9 +265,9 @@ function M.new(cfg, width, height)
     self.text(t.ers and 'OVERTAKE' or 'NO ERS',0,21,12,c.dim,nil,'center',205,true,2)
     self.text(tostring(mphFirst and kmh or mph),0,57,38,c.white,nil,'center',205,true)
     self.text(mphFirst and 'KM/H' or 'MPH',0,110,12,c.dim,nil,'center',nil,true)
-    self.draw(self.chargeBg,c.blue,.15) -- empty battery silhouette remains visible without KERS
+    self.draw(self.chargeBg,rgba({5,15,26},opacity)) -- empty battery silhouette remains visible without KERS
     if t.ers then
-      if t.charge>0 then self.draw(self.quad(-64,178,128*t.charge,48,'assets/battery.png',{0,0,t.charge,1},true),c.blue) end
+      if t.charge>0 then self.draw(self.quad(-64,178,128*t.charge,48,'assets/battery.png',{0,0,t.charge,1},true),rgba({46,212,255},opacity)) end
       self.image('assets/bolt.png',-10,186,16,30,c.white,true)
     else self.text('--',0,193,13,c.dim,nil,'center',nil,true) end
     if t.leaderFirst then

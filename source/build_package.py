@@ -26,8 +26,10 @@ def files():
 def main():
     # Preserve license notices when installing only the runtime ZIP.
     licenses=APP/'licenses'; licenses.mkdir(exist_ok=True)
-    for src in [ROOT/'LICENSE.txt',*sorted((ROOT/'source/fonts').glob('*OFL.txt'))]:
-        (licenses/src.name).write_bytes(src.read_bytes())
+    license_source=ROOT/'LICENSE' if (ROOT/'LICENSE').exists() else ROOT/'LICENSE.txt'
+    for src in [license_source,*sorted((ROOT/'source/fonts').glob('*OFL.txt'))]:
+        target='LICENSE.txt' if src==license_source else src.name
+        (licenses/target).write_bytes(src.read_bytes())
     source=[]
     extensions={'.lua': 'lua','.ini':'ini','.example':'ini','.py':'python',
                 '.txt':'text','.json':'json','.html':'html','.cjs':'javascript'}
@@ -42,8 +44,9 @@ def main():
     allfiles=files()+[ROOT/'docs/SOURCE-CONTENTS.md']
     (ROOT/'FILES.sha256').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+
         p.relative_to(ROOT).as_posix()+'\n' for p in allfiles),encoding='utf-8')
-    complete=ROOT.parent/(ROOT.name+'-complete.zip')
-    install=ROOT.parent/(ROOT.name+'-install.zip')
+    output=ROOT/'dist'; output.mkdir(exist_ok=True)
+    complete=output/(ROOT.name+'-complete.zip')
+    install=output/(ROOT.name+'-install.zip')
     with zipfile.ZipFile(complete,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
         for p in sorted(allfiles+[ROOT/'FILES.sha256']): z.write(p,ROOT.name+'/'+p.relative_to(ROOT).as_posix())
     with zipfile.ZipFile(install,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:

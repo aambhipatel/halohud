@@ -22,11 +22,14 @@ class Version12Tests(unittest.TestCase):
           local t=T.new(); t.deploy=0.5;t.recharge=0
           ui.beginTransparentWindow('test',vec2(),vec2(1920,1080),true,false)
           R.new(cfg,1920,1080).render(t);ui.endTransparentWindow()''')
-        q=[c for c in h.commands if c[0]=='assets/tab_fill.png']
-        self.assertEqual(len(q),2) # two curved columns, no eight-segment subdivision
+        q=[c for c in h.commands if c[0]=='assets/curved_energy_fill.png' and c[2][1]>0.6]
+        self.assertEqual(len(q),1) # one continuous half-filled deploy field; recharge empty
         for _,p,_,uv in q:
-            self.assertAlmostEqual(p[2][1]-p[1][1],91)
-            self.assertEqual(uv[0][1],0.5);self.assertEqual(uv[2][1],1)
+            import math
+            half_height=206*math.sin(math.radians(27))+23
+            self.assertAlmostEqual(p[2][1]-p[1][1],half_height,places=4)
+            self.assertEqual(uv[0][1],0.5)
+            self.assertAlmostEqual(uv[2][1],(160+half_height)/320)
 
     def test_profile_exact_id_runtime_values_generic_fallback(self):
         h=Harness();h.lua.execute('''local S=require('settings');local c=S.read(nil)
