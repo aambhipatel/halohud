@@ -1,0 +1,928 @@
+{
+  "model": "fu26.kn5",
+  "version": 5,
+  "node_count": 343,
+  "bytes_consumed": 22740040,
+  "trailing_bytes": 70360599,
+  "note": "Trailing bytes are not interpreted; bounds are from parsed nodes only.",
+  "selected_nodes": [
+    {
+      "path": "/FBX: f12026.fbx/cameras",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        -0.02291559986770153,
+        0.9011414051055908,
+        0.8906735777854919
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/cameras/cameras",
+      "class": 2,
+      "active": true,
+      "vertices": 4590,
+      "world_min": [
+        -0.2851929944008589,
+        0.3886669802112368,
+        -0.5376101642720565
+      ],
+      "world_max": [
+        0.2851937133818865,
+        1.1758806364433934,
+        2.0424398861863464
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/cockpits_foam",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        1.1920930376163597e-07,
+        0.5805811882019043,
+        0.7787209153175354
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/cockpits_foam/cockpits_foam",
+      "class": 2,
+      "active": true,
+      "vertices": 752,
+      "world_min": [
+        -0.21607208251951704,
+        0.26228735216137655,
+        0.6142064569592981
+      ],
+      "world_max": [
+        0.21607232093812456,
+        0.6405376473759818,
+        1.2236534493604263
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/SUSP_LF/SUS_STEER_FL",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.6194735765457153,
+        0.4682259084778336,
+        1.6004760454944273
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/SUSP_LF/SUS_STEER_FL/Cube.014",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.0005206599446545557,
+        0.46789026174131093,
+        1.6248363932688363
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/SUSP_LF/SUS_STEER_FL/Cube.014/Cube.014",
+      "class": 2,
+      "active": true,
+      "vertices": 530,
+      "world_min": [
+        0.1003331390685412,
+        0.42413164068985404,
+        1.533940199286798
+      ],
+      "world_max": [
+        0.6653145883825271,
+        0.5394224220231865,
+        1.713471992566407
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/SUSP_RF/SUS_STEER_FR",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        -0.6194739937782288,
+        0.4682259084778336,
+        1.6004760454944273
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/SUSP_RF/SUS_STEER_FR/Cube.020",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.0005208831781928769,
+        0.467890271879261,
+        1.6248365558072624
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/SUSP_RF/SUS_STEER_FR/Cube.020/Cube.020",
+      "class": 2,
+      "active": true,
+      "vertices": 532,
+      "world_min": [
+        -0.6653698946687038,
+        0.4241315524157305,
+        1.5339951300284085
+      ],
+      "world_max": [
+        -0.10036405513915694,
+        0.5396064740575925,
+        1.7151848311606541
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/DIR_SUS_STEER_FL",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.1445171982049942,
+        0.5004788041114807,
+        1.643846035003662
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/DIR_SUS_STEER_FR",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        -0.14451700448989868,
+        0.500478982925415,
+        1.643846035003662
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.0,
+        0.5951589941978455,
+        0.5593826174736023
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/thing 2",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        1.4066699804970995e-07,
+        0.5552606313236362,
+        0.5189513499107106
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/thing 2/thing 2",
+      "class": 2,
+      "active": true,
+      "vertices": 1177,
+      "world_min": [
+        -0.13304777924242547,
+        0.49939039320141115,
+        0.46942688641385444
+      ],
+      "world_max": [
+        0.11677871443047357,
+        0.6163156640292528,
+        0.5594743927438801
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/thing 1",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        1.4066699804970995e-07,
+        0.6312199564379026,
+        0.5172478615383751
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/thing 1/thing 1",
+      "class": 2,
+      "active": true,
+      "vertices": 1085,
+      "world_min": [
+        -0.14251901998481908,
+        0.5561800159002424,
+        0.4698172535176668
+      ],
+      "world_max": [
+        0.14251929119598963,
+        0.6696860008607275,
+        0.5561172544701658
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/metal.001",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        1.4066699804970995e-07,
+        0.5872584299482557,
+        0.5494816886427966
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/metal.001/metal.001",
+      "class": 2,
+      "active": true,
+      "vertices": 13003,
+      "world_min": [
+        -0.08882251944320177,
+        0.5319623708609564,
+        0.461852897768276
+      ],
+      "world_max": [
+        0.08887739237797307,
+        0.6978970788450627,
+        0.5905489448348089
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/hantag",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        1.4066699804970995e-07,
+        0.5951586084956915,
+        0.4769811332225149
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/hantag/hantag",
+      "class": 2,
+      "active": true,
+      "vertices": 2000,
+      "world_min": [
+        -0.14065610604958298,
+        0.5146627597245567,
+        0.4564812800875204
+      ],
+      "world_max": [
+        0.14065638799561245,
+        0.640874761622367,
+        0.49506501260096536
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/detalil",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.0,
+        0.5951589661235568,
+        0.5582026243209793
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/detalil/detalil",
+      "class": 2,
+      "active": true,
+      "vertices": 1983,
+      "world_min": [
+        -0.16283149591483692,
+        0.49800962305540425,
+        0.4144730192631102
+      ],
+      "world_max": [
+        0.16284672311276083,
+        0.7344578012157008,
+        0.5403834556876527
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/bottons",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        -0.07703211158514023,
+        0.6627022944294165,
+        0.4999911895167724
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/bottons/bottons",
+      "class": 2,
+      "active": true,
+      "vertices": 29798,
+      "world_min": [
+        -0.12911879582851285,
+        0.5313786518679814,
+        0.44935356044770947
+      ],
+      "world_max": [
+        0.12911917977086704,
+        0.691722130631282,
+        0.57789744783531
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LCD",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        2.110003975985819e-07,
+        0.5951585488910467,
+        0.47698113322250524
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LCD/LCD",
+      "class": 2,
+      "active": true,
+      "vertices": 34,
+      "world_min": [
+        -0.08265801433778913,
+        0.5853812245445503,
+        0.4327888620864413
+      ],
+      "world_max": [
+        0.08270921947558053,
+        0.7172959501279798,
+        0.5058591735951796
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/base.002",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        2.110003975985819e-07,
+        0.5951585488910467,
+        0.47698113322250524
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/base.002/base.002",
+      "class": 2,
+      "active": true,
+      "vertices": 7291,
+      "world_min": [
+        -0.17058087514483714,
+        0.49465780068405096,
+        0.4256112696682084
+      ],
+      "world_max": [
+        0.17058139966725835,
+        0.7361754830577962,
+        0.555271385443627
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/detalil.001",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.0,
+        0.5957489925203845,
+        0.5593826175697251
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/detalil.001/detalil.001",
+      "class": 2,
+      "active": true,
+      "vertices": 227,
+      "world_min": [
+        -0.11603287464183598,
+        0.6598387231210049,
+        0.4305233746808753
+      ],
+      "world_max": [
+        0.11603316476743153,
+        0.7362851322564816,
+        0.5371351437462869
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.0,
+        0.6892741029324289,
+        0.46495525582134783
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_Blue",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_Blue/LED_Blue",
+      "class": 2,
+      "active": true,
+      "vertices": 208,
+      "world_min": [
+        -0.06147019961204332,
+        0.6624880445966096,
+        0.4646806542113657
+      ],
+      "world_max": [
+        0.061571508510501145,
+        0.6705022079712689,
+        0.4729962071822545
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_0",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_0/LED_RPM_0",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        0.040069579293607445,
+        0.6854327465829155,
+        0.4642865549484573
+      ],
+      "world_max": [
+        0.04806039419004627,
+        0.6935930631975865,
+        0.47259084240631066
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_1",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_1/LED_RPM_1",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        0.03377820396699899,
+        0.6854911641287609,
+        0.46427781245679806
+      ],
+      "world_max": [
+        0.0417690199697368,
+        0.693593066950953,
+        0.47259551645924314
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_2",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_2/LED_RPM_2",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        0.02748682942560046,
+        0.685500705535709,
+        0.4642788199974592
+      ],
+      "world_max": [
+        0.035477642261972794,
+        0.6935930680974904,
+        0.47258524895710746
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_3",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_3/LED_RPM_3",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        0.021195450166039062,
+        0.6854327539327721,
+        0.46427780886030834
+      ],
+      "world_max": [
+        0.029186269668003133,
+        0.693514868786221,
+        0.4725955115593398
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_4",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_4/LED_RPM_4",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        0.015039014779994263,
+        0.6855591268349189,
+        0.4642788147264261
+      ],
+      "world_max": [
+        0.022894895784259343,
+        0.6935930743008082,
+        0.4725908317599619
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_5",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_5/LED_RPM_5",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        0.008612707896313153,
+        0.6855007124496265,
+        0.46427780265699214
+      ],
+      "world_max": [
+        0.016603519354497755,
+        0.6934667062985657,
+        0.47256916153273076
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_6",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_6/LED_RPM_6",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        0.0024224283936693375,
+        0.6855789166607992,
+        0.46429280978041015
+      ],
+      "world_max": [
+        0.010211048079677335,
+        0.6934469220831866,
+        0.47253708911359193
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_7",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_7/LED_RPM_7",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        -0.003970041411759141,
+        0.6854911788284725,
+        0.4642788077476975
+      ],
+      "world_max": [
+        0.004020759974091785,
+        0.6935930803472511,
+        0.4725955017595329
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_8",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_8/LED_RPM_8",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        -0.010261417779989658,
+        0.6854327661825331,
+        0.464286535348846
+      ],
+      "world_max": [
+        -0.002270617571275238,
+        0.6935251291802528,
+        0.4725954980061676
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_9",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_9/LED_RPM_9",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        -0.016552780909521024,
+        0.6854911837283775,
+        0.4642865318705106
+      ],
+      "world_max": [
+        -0.008561989288485103,
+        0.6934564696934539,
+        0.47259431050463063
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_14",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_14/LED_RPM_14",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        -0.04800966576570996,
+        0.6855008043147792,
+        0.464278791142821
+      ],
+      "world_max": [
+        -0.04001883556994648,
+        0.693534753520024,
+        0.4725908060418136
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_Red",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_Red/LED_Red",
+      "class": 2,
+      "active": true,
+      "vertices": 208,
+      "world_min": [
+        -0.061533067571505645,
+        0.6754683967574873,
+        0.46445289206887375
+      ],
+      "world_max": [
+        0.06153330237113672,
+        0.6835608045817978,
+        0.4727694536899446
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_Yellow",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_Yellow/LED_Yellow",
+      "class": 2,
+      "active": true,
+      "vertices": 208,
+      "world_min": [
+        -0.06604224308673103,
+        0.6690112787961465,
+        0.46456665695035965
+      ],
+      "world_max": [
+        0.06594140224100334,
+        0.6770452271004267,
+        0.472882116319497
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_10",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_10/LED_RPM_10",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        -0.022844180883549933,
+        0.6855007260028033,
+        0.46427779171063505
+      ],
+      "world_max": [
+        -0.014853340997513849,
+        0.6935346726012256,
+        0.47259430849061823
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_11",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_11/LED_RPM_11",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        -0.029135523790819517,
+        0.6854328446513823,
+        0.4642817684672994
+      ],
+      "world_max": [
+        -0.02114474225198279,
+        0.6935252072131601,
+        0.4725943043860962
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_12",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_12/LED_RPM_12",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        -0.03542692376484842,
+        0.6855110488625665,
+        0.46427879604272415
+      ],
+      "world_max": [
+        -0.02743608387881233,
+        0.6935252083597098,
+        0.4725943019361549
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_13",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        0.044064987578271264,
+        0.6895097904162303,
+        0.4684336331281643
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/STEER_HR/LEDS/LED_RPM_13/LED_RPM_13",
+      "class": 2,
+      "active": true,
+      "vertices": 104,
+      "world_min": [
+        -0.041583329225375096,
+        0.6855302696520597,
+        0.4642787922893705
+      ],
+      "world_max": [
+        -0.03372748645927208,
+        0.6935347497666493,
+        0.4725942986187301
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/body_halo",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        5.9604641222676946e-08,
+        0.4173603057861328,
+        0.9547728896141052
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/body_halo/body_halo",
+      "class": 2,
+      "active": true,
+      "vertices": 4400,
+      "world_min": [
+        -0.3773630559444463,
+        0.6667622690253766,
+        -0.08229333024615682
+      ],
+      "world_max": [
+        0.3762351572513545,
+        0.929603896749698,
+        0.8714382190828901
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/body_halo_decal",
+      "class": 1,
+      "active": true,
+      "world_translation": [
+        5.9604641222676946e-08,
+        0.4178602993488312,
+        0.9547728896141052
+      ]
+    },
+    {
+      "path": "/FBX: f12026.fbx/body_halo_decal/body_halo_decal",
+      "class": 2,
+      "active": true,
+      "vertices": 896,
+      "world_min": [
+        -0.35024034976959584,
+        0.7755561812122043,
+        0.13339839541320353
+      ],
+      "world_max": [
+        0.35117325186729076,
+        0.9301038903123964,
+        0.6024546731008296
+      ]
+    }
+  ]
+}

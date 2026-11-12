@@ -1,0 +1,12 @@
+; Example only: car-local coordinates in metres. Do not overwrite a car's file.
+; Append this block to an editable mod's data/cameras.ini, renumbering to the next
+; contiguous CAMERA_n. Position is illustrative, not calibrated to any car.
+; x=right, y=up, z=forward in this example. Inspect the target model's axes first.
+; 8 degrees down from forward; FORWARD and UP are orthogonal unit vectors.
+[CAMERA_6]
+POSITION=0.000,1.100,-0.300
+FORWARD=0.000,-0.139173,0.990268
+UP=0.000,0.990268,0.139173
+FOV=72
+EXPOSURE=30
+EXTERNAL_SOUND=0

@@ -1,0 +1,16 @@
+{
+  "runtime_unchanged": true,
+  "cases": [
+    "leader",
+    "following",
+    "solo"
+  ],
+  "images": 18,
+  "checks": [
+    "16 red brake segments",
+    "no battery outline texture",
+    "P1 player above P2",
+    "solo centered",
+    "no CLEAR TRACK in preview cases"
+  ]
+}

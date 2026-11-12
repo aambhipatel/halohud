@@ -1,0 +1,178 @@
+{
+  "ui/ui_car.json": {
+    "size": 3979,
+    "sha256": "8ac305d13e8e8a66b22d65878533e1cdfd356161bdae018a07a4bb3e2b1695ca"
+  },
+  "extension/ext_config.ini": {
+    "size": 2401,
+    "sha256": "f32d293ebb877939a55845f6e595c7667d4f086d61766a0dba99b44035a7b5ae"
+  },
+  "extension/ext_config_Leds.ini": {
+    "size": 144,
+    "sha256": "f78f6c8851f39b45ef3df917ec530a8026e9ffefa1f9bc1f54fe8245599a7b7f"
+  },
+  "extension/FU26_Display_Script.lua": {
+    "size": 7361,
+    "sha256": "b3beda36a77b2ecbc2c1698c0d3cb1025a2dd4971e2278bed29124be92180023"
+  },
+  "extension/SF24_Display_script.lua": {
+    "size": 20869,
+    "sha256": "2701ddf89bd2b7fa84412614f8e42a4265b86bde51ff97a05aed0dffc95f46ff"
+  },
+  "extension/SF24_LEDs_script.lua": {
+    "size": 16171,
+    "sha256": "44afc2b10ef913a9fad0ea3b6ddb452c578d1418ed0bbcb373f3b60deb3ebf95"
+  },
+  "extension/src/connection.lua": {
+    "size": 3111,
+    "sha256": "a677ca6120c4f65f0792e13d15a0984999363da58160c3425583179137deadcd"
+  },
+  "extension/src/display_helper.lua": {
+    "size": 56511,
+    "sha256": "88128384d5586572b584bf434c3bf37dcd71387ec57fbef46d8a3124e5305f53"
+  },
+  "extension/src/display_src.lua": {
+    "size": 46796,
+    "sha256": "17467c5cda9d99cdc474be7db7762c73eafbfd9c0d03a089dacbff90d0e02607"
+  },
+  "model_template": {
+    "path": "FU 2026 3D, 2D template/formula ultra 2026 3D template.obj",
+    "vertices": 90512,
+    "selected_bounds": {
+      "wheel_cover_lf": {
+        "min": [
+          0.925494,
+          0.130051,
+          1.315245
+        ],
+        "max": [
+          0.941151,
+          0.573657,
+          1.760095
+        ],
+        "vertices": 1829
+      },
+      "wheel_cover_lf.001": {
+        "min": [
+          0.929192,
+          0.164303,
+          1.354645
+        ],
+        "max": [
+          0.939852,
+          0.521423,
+          1.720665
+        ],
+        "vertices": 934
+      },
+      "wheel_cover_lr": {
+        "min": [
+          0.923205,
+          0.130051,
+          -2.084774
+        ],
+        "max": [
+          0.938862,
+          0.573657,
+          -1.639925
+        ],
+        "vertices": 1829
+      },
+      "wheel_cover_lr.001": {
+        "min": [
+          0.926903,
+          0.164302,
+          -2.045374
+        ],
+        "max": [
+          0.937563,
+          0.521422,
+          -1.679355
+        ],
+        "vertices": 934
+      },
+      "wheel_cover_rr": {
+        "min": [
+          -0.938862,
+          0.130051,
+          -2.084775
+        ],
+        "max": [
+          -0.923205,
+          0.573657,
+          -1.639925
+        ],
+        "vertices": 1829
+      },
+      "wheel_cover_rr.001": {
+        "min": [
+          -0.937563,
+          0.164302,
+          -2.045375
+        ],
+        "max": [
+          -0.926903,
+          0.521422,
+          -1.679355
+        ],
+        "vertices": 934
+      },
+      "wheel_cover_rf": {
+        "min": [
+          -0.941152,
+          0.130051,
+          1.315245
+        ],
+        "max": [
+          -0.925494,
+          0.573657,
+          1.760095
+        ],
+        "vertices": 1829
+      },
+      "wheel_cover_rf.001": {
+        "min": [
+          -0.939853,
+          0.164303,
+          1.354645
+        ],
+        "max": [
+          -0.929192,
+          0.521423,
+          1.720665
+        ],
+        "vertices": 934
+      },
+      "body_halo": {
+        "min": [
+          -0.347467,
+          0.697204,
+          -0.051851
+        ],
+        "max": [
+          0.347467,
+          0.899162,
+          0.841194
+        ],
+        "vertices": 4400
+      },
+      "body_halo_decal": {
+        "min": [
+          -0.321173,
+          0.805108,
+          0.16384
+        ],
+        "max": [
+          0.321173,
+          0.899662,
+          0.572903
+        ],
+        "vertices": 896
+      }
+    }
+  },
+  "data_acd": {
+    "size": 409839,
+    "action": "not opened, not unpacked, not modified"
+  }
+}

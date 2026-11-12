@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HaloHUD for Assetto Corsa — Aero motion preview</title>
+<style>
+@font-face{font-family:Orbitron;src:url('source/fonts/Orbitron.ttf')}
+*{box-sizing:border-box}body{margin:0;background:#15232c;color:#e4f3f5;font:16px system-ui,sans-serif}
+main{max-width:900px;margin:40px auto;padding:24px}h1{font-size:26px;margin:0 0 12px;font-weight:600}
+p{line-height:1.5;color:#a8bec9;max-width:740px}svg{display:block;width:100%;height:auto;background:#1e303c;margin:24px 0}
+button{background:#153d4b;color:#fff;border:1px solid #2fe0d0;border-radius:5px;padding:11px 18px;font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:4px}
+.controls{display:flex;gap:16px;align-items:center;flex-wrap:wrap}input{accent-color:#2fe0d0}label{display:flex;gap:10px;align-items:center}
+output{font-variant-numeric:tabular-nums;color:#fff}small{color:#9fb8c8}#seek{width:220px}#duration{width:150px}
+@media(max-width:600px){main{margin:8px auto;padding:16px}h1{font-size:22px}#seek{width:170px}}
+</style>
+<main>
+<h1>Active aero · animation preview</h1>
+<p>Both slashes rotate clockwise 45° to activate, and counterclockwise to deactivate. They stay parallel and separate: the left slash becomes the short upper dash, and the right becomes the long lower dash.</p>
+<svg viewBox="0 0 800 300" role="img" aria-label="Animated aero symbol in a curved navy HUD panel">
+ <defs><linearGradient id="panel" x2="0" y2="1"><stop stop-color="#102d40"/><stop offset="1" stop-color="#06182b"/></linearGradient></defs>
+ <path d="M64 60 Q395 25 736 85 L725 265 Q395 205 55 248Z" fill="url(#panel)" stroke="#2fe0d0" stroke-opacity=".6" stroke-width="1.5"/>
+ <g transform="translate(285 130) scale(2.7)">
+  <text x="-24" y="-18" fill="#fff" font-family="Orbitron, sans-serif" font-size="5.8">ACTIVE AERO</text>
+  <g id="left"><line id="leftLine" stroke-linecap="butt" stroke-width="1.8"/></g>
+  <g id="right"><line id="rightLine" stroke-linecap="butt" stroke-width="1.8"/></g>
+ </g>
+ <text id="state" x="520" y="155" fill="#9fb8c8" font-family="Orbitron,sans-serif" font-size="17">INACTIVE</text>
+ <text x="520" y="187" fill="#9fb8c8" font-family="system-ui" font-size="13">Magnified motion study</text>
+</svg>
+<div class="controls">
+ <button id="toggle" type="button" aria-pressed="false">Activate aero</button>
+ <label><input id="loop" type="checkbox" checked> Auto loop</label>
+ <label>Duration <input id="duration" type="range" min="150" max="1000" step="10" value="420"><output id="ms">420 ms</output></label>
+ <label>Scrub <input id="seek" type="range" min="0" max="1000" value="0"><output id="percent">0%</output></label>
+</div>
+<p><small>Approved motion reference: this animation is now implemented in HaloHUD 1.5. A damped transition preserves position and velocity when toggled mid-motion. Duration controls the approximate settling time. Reduced-motion preference disables automatic playback and snaps manual toggles; scrubbing remains available.</small></p>
+</main>
+<script>
+const byId=id=>document.getElementById(id),left=byId('left'),right=byId('right');
+const leftLine=byId('leftLine'),rightLine=byId('rightLine'),state=byId('state');
+const toggle=byId('toggle'),loop=byId('loop'),duration=byId('duration'),seek=byId('seek');
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let phase=0,velocity=0,target=0,moving=false,lastTime=performance.now(),loopAt=lastTime+1100;
+if(reduced)loop.checked=false;
+function paint(p){
+ const mix=(a,b)=>a+(b-a)*p;
+ // Preserve line ordering along their shared normal. Both rotate identically.
+ // Assign left -> upper short and right -> lower long to avoid intersecting paths.
+ const poses=[[-12,8,-9.5,-11,-45+45*p,mix(24,32)], [12,8,0,2,-45+45*p,mix(24,51)]];
+ [left,right].forEach((g,i)=>{
+   const [x,y,tx,ty,angle,length]=poses[i];
+   g.setAttribute('transform',`translate(${mix(x,tx)} ${mix(y,ty)}) rotate(${angle})`);
+   const line=i===0?leftLine:rightLine;
+   line.setAttribute('x1',-length/2);line.setAttribute('x2',length/2);line.setAttribute('y1',0);line.setAttribute('y2',0);
+   line.setAttribute('stroke-width',mix(2.2,4));
+   line.setAttribute('stroke',`rgb(${mix(47,43)} ${mix(224,227)} ${mix(208,122)})`);
+ });
+ seek.value=Math.round(p*1000);byId('percent').textContent=Math.round(p*100)+'%';
+ state.textContent=p<.001?'INACTIVE':p>.999?'ACTIVE':target?'ACTIVATING':'DEACTIVATING';
+ state.setAttribute('fill',p>.999?'#2be37a':'#9fb8c8');
+}
+function go(next,now=performance.now()){
+ target=next;moving=Math.abs(target-phase)>0.00001&&!reduced;lastTime=now;
+ toggle.textContent=target?'Deactivate aero':'Activate aero';toggle.setAttribute('aria-pressed',!!target);
+ if(!moving){phase=target;velocity=0;paint(phase)}
+ loopAt=moving?Infinity:now+1100;
+}
+toggle.onclick=()=>go(target?0:1);
+duration.oninput=()=>{byId('ms').textContent=duration.value+' ms'};
+seek.oninput=()=>{moving=false;velocity=0;loop.checked=false;phase=+seek.value/1000;paint(phase)};
+loop.onchange=()=>{loopAt=performance.now()+500};
+function tick(now){
+ const dt=Math.max(0,Math.min(0.05,(now-lastTime)/1000));lastTime=now;
+ if(moving){
+   // Exact critically damped spring step: no reset of velocity during reversals.
+   const w=7/(+duration.value/1000),offset=phase-target,b=velocity+w*offset;
+   const decay=Math.exp(-w*dt);
+   phase=target+(offset+b*dt)*decay;velocity=(velocity-w*b*dt)*decay;
+   if(phase<0||phase>1){phase=Math.max(0,Math.min(1,phase));velocity=0}
+   if(Math.abs(phase-target)<0.0001&&Math.abs(velocity)<0.002){phase=target;velocity=0;moving=false;loopAt=now+1100}
+   paint(phase);
+ }
+ if(!moving&&loop.checked&&now>=loopAt)go(target?0:1,now);
+ requestAnimationFrame(tick);
+}
+paint(0);requestAnimationFrame(tick);
+</script></html>

@@ -1,0 +1,102 @@
+[
+  {
+    "file": "assets/battery.png",
+    "width": 128,
+    "height": 48
+  },
+  {
+    "file": "assets/bolt.png",
+    "width": 32,
+    "height": 48
+  },
+  {
+    "file": "assets/boost_glow.png",
+    "width": 256,
+    "height": 64
+  },
+  {
+    "file": "assets/dial_fill.png",
+    "width": 360,
+    "height": 360
+  },
+  {
+    "file": "assets/dial_rim.png",
+    "width": 360,
+    "height": 360
+  },
+  {
+    "file": "assets/labels.png",
+    "width": 2048,
+    "height": 1024
+  },
+  {
+    "file": "assets/left_fill.png",
+    "width": 512,
+    "height": 192
+  },
+  {
+    "file": "assets/left_rim.png",
+    "width": 512,
+    "height": 192
+  },
+  {
+    "file": "assets/module_fill.png",
+    "width": 96,
+    "height": 192
+  },
+  {
+    "file": "assets/module_rim.png",
+    "width": 96,
+    "height": 192
+  },
+  {
+    "file": "assets/names.png",
+    "width": 2048,
+    "height": 1024
+  },
+  {
+    "file": "assets/player_highlight.png",
+    "width": 512,
+    "height": 192
+  },
+  {
+    "file": "assets/player_highlight_leader.png",
+    "width": 512,
+    "height": 192
+  },
+  {
+    "file": "assets/player_highlight_solo.png",
+    "width": 512,
+    "height": 192
+  },
+  {
+    "file": "assets/right_fill.png",
+    "width": 512,
+    "height": 192
+  },
+  {
+    "file": "assets/right_rim.png",
+    "width": 512,
+    "height": 192
+  },
+  {
+    "file": "assets/tab.png",
+    "width": 64,
+    "height": 192
+  },
+  {
+    "file": "assets/tab_fill.png",
+    "width": 64,
+    "height": 192
+  },
+  {
+    "file": "assets/white.png",
+    "width": 2,
+    "height": 2
+  },
+  {
+    "file": "icon.png",
+    "width": 64,
+    "height": 64
+  }
+]

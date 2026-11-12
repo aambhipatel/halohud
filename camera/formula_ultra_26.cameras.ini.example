@@ -1,0 +1,16 @@
+; Formula Ultra 2026 — pending loose cameras.ini and car.ini export.
+; This is intentionally a comment-only merge guide, not an executable camera.
+; No position, FOV, pitch or CAMERA_n index is invented.
+;
+; Once supplied:
+; 1. Preserve existing camera sections and append the next contiguous CAMERA_n.
+; 2. Derive POSITION from the confirmed halo mount / driver-eye transforms.
+; 3. Derive orthogonal FORWARD and UP from the verified optical pitch.
+; 4. Use the exported FOV or an explicitly chosen and tested replacement.
+; 5. Project the LCD bind-pose geometry through that camera and align the HUD.
+; 6. Verify in AC: halo clearance, front wheels/nose, LCD visibility and DEMO.
+;
+; Available evidence: extension/ext_config.ini attaches SF24_Display_script.lua
+; to the LCD mesh. DISPLAY_POS=0,0 is a texture origin, not a car-local camera.
+; Actual KN5 bind-pose bounds and inspection limits: ../CAR-PROFILE.md.
+; Neither this file nor HaloHUD edits the installed car.

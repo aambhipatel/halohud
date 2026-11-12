@@ -1,0 +1,36 @@
+HaloHUD for Assetto Corsa 1.7.0 validation record
+Date: 2026-11-12
+
+PASS: 20 PNGs regenerated, including shared player-highlight mask and continuous tab fill mask.
+PASS: 52 Lua 5.1/offline tests, including runtime callbacks, car-profile isolation, saving, energy formulas, scales, digit centers, matching projected strips and continuous UV cropping.
+PASS: generated CSP 0.2.0 SDK declaration inventory, including ac.getCarID, rpmLimiter, gearCount and existing energy/DRS fields.
+SDK SHA256 b539e88484617e4f169c8c413e9c7518ba9d96e56b556eb3432f0890fdbc883d
+PASS: actual Lua draw-stream previews and embedded offline demo regenerated; reference fixture 369 quads.
+PASS: highlight render inspection and bottom-gap measurements at curvature 0/1/1.6, variation below 0.01 UI pixel.
+PASS: original car folder inspected read-only. Packed data.acd not opened, unpacked or modified. No car file edits.
+
+USER CONFIRMED: previous app runs in Assetto Corsa and looks good.
+PENDING: new in-game integration and total frame-time validation; physical Formula Ultra camera, driver eye position, screen clearance, battery capacity and recovery calibration require loose exports. See CAR-PROFILE.md.
+LIMIT: KN5 hierarchy inspection records derived bind-pose bounds; trailing model data was not interpreted. It is not a camera calibration or a model asset export.
+
+PASS v1.3: unpadded speed in both unit orders, 16 pedal segments, inactive / /, centered solo row/highlight and multiplayer partial-board guard. Actual solo-state render inspected. New in-game behavior remains to be confirmed.
+
+PASS v1.6.0: racePosition-based classification and P-1 lookup, overtakes, player-first AI leaderboard regression, missing ranks/opponents and solo. In-game confirmation remains pending.
+
+PASS v1.4: fixed RPM/deploy boundaries, plain OVERTAKE, removed TURN, debounced autosave including disabled HUD, settings reload, failed-save retry and release flush. Updated actual draw-stream render inspected. New in-game confirmation remains pending.
+
+PASS 1.6.0: strict >11000 RPM and grey inactive label boxes. HTML animation endpoints/rotation/reversal/controls smoke-tested; animation remains preview-only, awaiting user review. Lua aero implementation unchanged.
+
+Aero HTML preview revision 2: both slashes rotate clockwise into active and counterclockwise into inactive; no crossing. 1,001 phases checked with >=8.57 design-pixel stroke clearance. Mid-transition position/velocity continuity verified. App runtime unchanged.
+
+PASS 1.5: user-approved HTML animation integrated in aero.lua. HTML/Lua numerical parity, non-crossing projected quads, reversal continuity and resize persistence verified. New six-file Lua runtime parsed successfully. Live in-game confirmation remains pending.
+
+PASS 1.6.0: global appsHidden/uiHidden hide/show, saved ENABLED preservation and persistence while hidden. The SDK explicitly documents Ctrl+H for appsHidden. In-game confirmation remains pending.
+
+PASS 1.6.0: reverse replaces/highlights neutral slot; repeated R/N/forward transitions tested across gear counts. In-game confirmation pending.
+
+PASS 1.6: approved red brakes, solid battery silhouette without outline, P1 above P2 with no CLEAR TRACK. Pixel parity with approved masks, race transitions, missing data and battery fallback tested. Integrated Lua P1 render inspected. In-game confirmation pending.
+
+PASS 1.7: optional mouse drag handle, actual fitted-scale conversion, first-click stability, edge clamp/reversal, offset autosave, edit mode toggle/Reset and Ctrl+H hiding. All 52 offline tests and SDK inventory pass. Existing 20 assets unchanged. In-game mouse integration remains pending.
+
+Organized release: all 87 original distributable files accounted for (source listing and checksums regenerated separately). App/runtime files preserved byte-for-byte. Updated generator, preview and test paths for previews/, docs/ and reports/. All 52 tests rerun in the organized hierarchy; ZIP CRC and all 20 runtime asset dimensions verified.

@@ -1,0 +1,23 @@
+[
+  {
+    "curve": 0,
+    "design_normal_inset": 12,
+    "projected_bottom_min": 12.02026412332006,
+    "projected_bottom_max": 12.020264123320063,
+    "variation": 3.552713678800501e-15
+  },
+  {
+    "curve": 1,
+    "design_normal_inset": 12,
+    "projected_bottom_min": 12.018254645288597,
+    "projected_bottom_max": 12.018254645289092,
+    "variation": 4.956035581926699e-13
+  },
+  {
+    "curve": 1.6,
+    "design_normal_inset": 12,
+    "projected_bottom_min": 12.017098929227467,
+    "projected_bottom_max": 12.017098929227656,
+    "variation": 1.8829382497642655e-13
+  }
+]
