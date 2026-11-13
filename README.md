@@ -1,6 +1,6 @@
 # HaloHUD for Assetto Corsa
 
-**Version 1.10.0 · Assetto Corsa + CSP · MIT**
+**Version 1.10.1 · Assetto Corsa + CSP · MIT**
 
 An unofficial, F1-inspired onboard telemetry overlay for Assetto Corsa. It draws a curved teal-and-navy HUD around the cockpit view using a CSP Lua app and original artwork.
 
@@ -81,7 +81,7 @@ python -m venv ../halohud-venv
 ..\halohud-venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-The test harness executes Lua 5.1 through Lupa and mocks CSP interfaces. The current suite has 68 tests; it does not prove native mouse routing, engine integration or GPU performance.
+The test harness executes Lua 5.1 through Lupa and mocks CSP interfaces. The current suite has 71 tests; it does not prove native mouse routing, engine integration or GPU performance.
 
 ### Generate assets, previews and packages
 
@@ -148,7 +148,15 @@ The Formula Ultra profile uses available live powertrain data for the exact car 
 
 ## Changelog
 
-Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.10.0. Documentation and publishing changes are tracked separately.
+Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.10.1. Documentation and publishing changes are tracked separately.
+
+### 1.10.1 — leaderboard animation triggers
+
+- Fixed ordinary position changes (for example P13 → P12) appearing static because the two-row layout did not change. Rank gains/losses now produce a directional vertical settling motion without moving rows instantly.
+- Added a vertical reveal/fade for a changed comparison driver when the player’s rank stays the same.
+- Kept full player/opponent row swaps for P1 transitions and solo centering.
+- Made demo mode exercise following, rank changes, leading and solo states on a 24-second loop, with a transition every six seconds.
+- Added regression checks for ordinary rank changes, opponent replacement, stable frames and demo coverage.
 
 ### 1.10.0 — animated leaderboard
 

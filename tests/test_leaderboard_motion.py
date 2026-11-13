@@ -65,3 +65,37 @@ class LeaderboardMotionTests(unittest.TestCase):
         h.lua.execute('uiState.windowSize=vec2(1280,720)');h.frame(.02)
         self.assertLess(h.lua.globals().observed,x)
         self.assertGreater(h.lua.globals().observed,-53.5)
+
+    def test_ordinary_rank_change_animates_without_layout_change(self):
+        h=Harness();h.lua.execute("""
+          local M=require('leaderboard_motion');local T=require('telemetry');local s=M.new();local t=T.new()
+          t.player.position='13';t.ahead.position='12';t.ahead.name='Bot'
+          M.update(s,t,0,450);assert(s.p.x==30.5)
+          t.player.position='12';t.ahead.position='11'
+          M.update(s,t,.016,450);assert(s.p.x<30.5 and s.p.v<0)
+          for i=1,120 do M.update(s,t,1/60,450) end
+          assert(s.p.x==30.5 and s.p.v==0)
+          t.player.position='13';t.ahead.position='12'
+          M.update(s,t,.016,450);assert(s.p.x>30.5 and s.p.v>0)
+        """)
+
+    def test_opponent_change_and_unchanged_frames(self):
+        h=Harness();h.lua.execute("""
+          local M=require('leaderboard_motion');local T=require('telemetry');local s=M.new();local t=T.new()
+          t.player.position='5';t.ahead.position='4';t.ahead.name='A'
+          M.update(s,t,0,450)
+          for i=1,30 do M.update(s,t,1/60,450) end
+          assert(s.p.x==30.5 and s.o.x==-49)
+          t.ahead.name='B';M.update(s,t,.016,450)
+          assert(s.o.x<-49 and s.opponent.name=='B' and s.a.x<1)
+        """)
+
+    def test_demo_exercises_board_transitions(self):
+        h=Harness();h.lua.execute("""
+          local T=require('telemetry');local M=require('leaderboard_motion');local t=T.new();local s=M.new()
+          T.demo(t,0,'FULL');M.update(s,t,0,450);assert(t.player.position=='13')
+          T.demo(t,6.1,'FULL');M.update(s,t,.016,450);assert(s.p.x<30.5)
+          T.demo(t,12.1,'FULL');assert(t.leaderFirst and t.player.position=='1')
+          T.demo(t,18.1,'FULL');assert(t.solo and t.ahead.name=='')
+          T.demo(t,24.1,'FULL');assert(not t.solo and not t.leaderFirst)
+        """)

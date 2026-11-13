@@ -5,6 +5,26 @@ function M.update(s,t,dt,duration)
   local p=t.solo and -11.5 or t.leaderFirst and -53.5 or 30.5
   local o=t.leaderFirst and 30.5 or -49
   local a=t.solo and 0 or 1
+  local layout=t.solo and 'solo' or t.leaderFirst and 'leading' or 'following'
+  local rank=tonumber(t.player and t.player.position)
+  local opponent=t.ahead.position..'|'..t.ahead.name
+  -- Rank/opponent updates normally retain the same two-row layout. Give those
+  -- updates a directional spring impulse instead of silently replacing text.
+  -- Change velocity, not position, so rapid retargets never teleport the rows.
+  if s.ready and layout==s.layout and not t.solo then
+    local changed=rank and s.rank and rank~=s.rank
+    if changed then
+      local timing=450/math.max(200,math.min(900,duration or 450))
+      local impulse=(rank<s.rank and -600 or 340)*timing
+      s.p.v=math.max(-600,math.min(340,s.p.v+impulse))
+      s.o.v=math.max(-600,math.min(340,s.o.v+impulse))
+    end
+    if opponent~=s.opponentKey then
+      if not changed then s.o.v=-420*450/math.max(200,math.min(900,duration or 450)) end
+      s.a.x=0;s.a.v=0 -- reveal the updated comparison driver legibly
+    end
+  end
+  s.layout=layout;s.rank=rank;s.opponentKey=opponent
   if not t.solo then s.opponent.position=t.ahead.position;s.opponent.name=t.ahead.name end
   dt=type(dt)=='number' and dt==dt and math.max(0,math.min(.05,dt)) or 0
   local w=7/(math.max(200,math.min(900,duration or 450))/1000)

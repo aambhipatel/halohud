@@ -176,6 +176,11 @@ function M.demo(out, t, mode)
   out.aeroAvailable = true
   out.ahead = {position='12', name=M.name('Oliver Bearman', mode)}
   out.player = {position='13', name=M.name('George Russell', mode)}
+  -- Exercise every board transition in demo, not just the telemetry gauges.
+  local phase=math.floor((t%24)/6)
+  if phase==1 then out.player.position='12';out.ahead.position='11'
+  elseif phase==2 then out.leaderFirst=true;out.player.position='1';out.ahead.position='2'
+  elseif phase==3 then out.solo=true;out.player.position='1';out.ahead.position='';out.ahead.name='' end
   return out
 end
 return M

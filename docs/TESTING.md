@@ -219,3 +219,8 @@ Player and opponent rows slide vertically between the existing race-leader/follo
 LEADERBOARD_ANIMATION_MS defaults to 450 ms and is clamped to 200–900 ms. The **Leaderboard animation** slider applies live and auto-saves. Race classification remains sampled at 4 Hz, while animation updates each graphics frame with a 50 ms hitch cap.
 
 Offline regression coverage includes swap/reversal continuity, solo fade with cached opponent data, highlight projection, resize persistence and duration saving. In AC, verify P1/P2 changes, solo/multiplayer transitions, missing opponents, rapid reversals, all panel scales, Ctrl+H and frame time. Native integration and CPU/GPU cost remain pending.
+
+
+## Leaderboard trigger regression (1.10.1)
+
+Check a rank gain/loss that does not involve P1: player and comparison rows now visibly settle vertically despite retaining their final row slots. A comparison-driver change at unchanged rank animates its reveal. Repeated identical telemetry must stay still. Force demo runs following → improved rank → P1 → solo at six-second intervals in a 24-second loop. Existing P1 full swaps, resize continuity and solo fades must still pass. Native validation and frame-time checks remain pending.
