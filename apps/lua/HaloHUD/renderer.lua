@@ -219,8 +219,18 @@ function M.new(cfg, width, height)
   function self.render(t)
     self.quads=0
     for i=1,#self.static do local q=self.static[i]; self.draw(q[1],q[2],q[3]) end
+    local board=t.leaderboardMotion
+    if board then
+      -- Crop the existing approved mask to the row, and move all projected strips
+      -- through the same skew/curve as the panel. Transparent atlas margins are excluded.
+      for i=0,n-1 do
+        self.draw(self.quad(-830+512*i/n,board.p.x-18.5,512/n,68,
+          'assets/player_highlight.png',{i/n,104/192,(i+1)/n,172/192}),c.accent)
+      end
+    else
     local highlight=self.highlights[t.leaderFirst and 'leader' or t.solo and 'solo' or 'regular']
     for i=1,#highlight do self.draw(highlight[i],c.accent) end
+    end
     for side,value in ipairs({t.brake,t.throttle}) do
       for i=1,PEDAL_SEGMENTS do
         self.draw(self.pedals[side][i],c.inactive)
@@ -270,6 +280,17 @@ function M.new(cfg, width, height)
       if t.charge>0 then self.draw(self.quad(-64,178,128*t.charge,48,'assets/battery.png',{0,0,t.charge,1},true),rgba({46,212,255},opacity)) end
       self.image('assets/bolt.png',-10,186,16,30,c.white,true)
     else self.text('--',0,193,13,c.dim,nil,'center',nil,true) end
+    if board then
+      local alpha=board.opponentAlpha
+      if alpha>0.001 then
+        local dim=rgbm(c.dim.r,c.dim.g,c.dim.b,opacity*alpha)
+        local white=rgbm(1,1,1,opacity*alpha)
+        self.text(board.opponent.position,-779,board.o.x+2,23,dim,'names')
+        self.text(board.opponent.name,-723,board.o.x,29,white,'names',nil,354)
+      end
+      self.text(t.player.position,-779,board.p.x+4,23,c.accent,'names')
+      self.text(t.player.name,-723,board.p.x,31,c.accent,'names',nil,354)
+    else
     if t.leaderFirst then
       self.text(t.player.position,-779,-49.5,23,c.accent,'names')
       self.text(t.player.name,-723,-53.5,31,c.white,'names',nil,354)
@@ -283,6 +304,7 @@ function M.new(cfg, width, height)
     local rowOffset=t.solo and -42 or 0
     self.text(t.player.position,-779,34.5+rowOffset,23,c.accent,'names')
     self.text(t.player.name,-723,30.5+rowOffset,31,c.white,'names',nil,354)
+    end
     end
     -- DRS is a proxy for the reference's active-aero icon, not universal active aero.
     local phase=t.aeroPhase

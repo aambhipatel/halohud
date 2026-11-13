@@ -1,0 +1,6 @@
+- Integrated the approved vertical leaderboard transition: player and opponent rows slide between their upper/lower positions, and solo sessions center the player.
+- Attached the player highlight to the animated row using the panel’s shared projected strips and skew.
+- Faded the opponent during row crossover to prevent overlapping names, and retained the previous opponent while fading into solo mode.
+- Preserved motion through rapid reversals and renderer rebuilds, including resizing and HUD dragging.
+- Added the auto-saved **Leaderboard animation** control (`LEADERBOARD_ANIMATION_MS`, default 450 ms, range 200–900 ms).
+- Kept live race classification and existing gear/aero animations unchanged; expanded offline coverage to 64 tests.

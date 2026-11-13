@@ -1,4 +1,4 @@
--- HaloHUD for Assetto Corsa 1.9.0, original screen-space artwork. CSP 0.2.0+ (build 2651).
+-- HaloHUD for Assetto Corsa 1.10.0, original screen-space artwork. CSP 0.2.0+ (build 2651).
 -- Required UI/telemetry calls were checked against the shipped 0.2.0 SDK.
 local Telemetry=require('telemetry')
 local Settings=require('settings')
@@ -7,6 +7,8 @@ local Aero=require('aero')
 local aero=Aero.new()
 local GearMotion=require('gear_motion')
 local gearMotion=GearMotion.new()
+local LeaderboardMotion=require('leaderboard_motion')
+local leaderboardMotion=LeaderboardMotion.new()
 local cfg, activeCfg, renderer, oldWidth, oldHeight
 local state=Telemetry.new()
 local demoTime, rowTimer, previousMode = 0, 0, nil
@@ -52,7 +54,7 @@ local function updateTelemetry(dt)
   local mode=(forceDemo or (not car and cfg.demo~='OFF')) and 'demo' or (car and 'live' or 'empty')
   if mode~=previousMode then
     state=Telemetry.new(); rowTimer=0; previousMode=mode
-    aero=Aero.new(); gearMotion=GearMotion.new()
+    aero=Aero.new(); gearMotion=GearMotion.new(); leaderboardMotion=LeaderboardMotion.new()
   end
   if mode=='demo' then Telemetry.demo(state,demoTime,cfg.names)
   elseif mode=='live' then
@@ -75,6 +77,7 @@ local function updateTelemetry(dt)
       end
     end
   end
+  state.leaderboardMotion=LeaderboardMotion.update(leaderboardMotion,state,dt,cfg.leaderboardDuration)
   local motion=GearMotion.update(gearMotion,state.gear,dt,cfg.gearDuration)
   state.gearPosition=motion.position;state.slotLetter=motion.letter;state.slotScale=motion.scale
   state.aeroPhase=Aero.update(aero,state.aeroActive,dt,cfg.aeroDuration)
@@ -151,7 +154,7 @@ function script.windowMain()
   if not cfg then
     ui.textWrapped(errorMessage or 'HaloHUD is loading.'); return
   end
-  ui.text('HaloHUD for Assetto Corsa 1.9.0')
+  ui.text('HaloHUD for Assetto Corsa 1.10.0')
   if ui.checkbox('Show HUD',enabled) then enabled=not enabled; markDirty() end
   if ui.checkbox('Force demo telemetry',forceDemo) then
     forceDemo=not forceDemo; cfg.demo=forceDemo and 'ON' or 'AUTO'; markDirty()
@@ -176,6 +179,7 @@ function script.windowMain()
   slider('X offset','x',-960,960,'%.0f px')
   slider('Y offset','y',-540,540,'%.0f px')
   slider('Curvature','curve',0,1.6)
+  slider('Leaderboard animation','leaderboardDuration',200,900,'%.0f ms')
   slider('Gear animation','gearDuration',150,600,'%.0f ms')
   slider('Aero animation','aeroDuration',150,1000,'%.0f ms')
   slider('Left timing scale','leftScale',0.5,1.5)

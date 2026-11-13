@@ -44,6 +44,11 @@ jobs:
           )
           PY
 
+      - name: Extract release description from README changelog
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python source/extract_release_notes.py "$RELEASE_TAG" --output dist/release-notes.md
+
       - name: Run tests
         run: python -m unittest discover -s tests -v
 
@@ -60,4 +65,4 @@ jobs:
             dist/*-complete.zip \
             --verify-tag \
             --title "HaloHUD for Assetto Corsa $RELEASE_TAG" \
-            --generate-notes
+            --notes-file dist/release-notes.md

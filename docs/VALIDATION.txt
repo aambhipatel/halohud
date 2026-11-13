@@ -42,3 +42,6 @@ Packaging: release archives now generated inside dist/ to keep all project chang
 
 
 PASS 1.9.0 (2026-11-12): approved horizontal gear highlight motion and 30% N/R pulse integrated into Lua. 60 offline tests pass, including slide convergence, velocity continuity on reversal, peak letter changes, rapid N/R retargeting, renderer rebuild persistence, and timing auto-save. No new CSP APIs; generated SDK inventory passes. Browser demo regenerated from real Lua draw calls. New gear_motion.lua is required when upgrading. In-game native integration and CPU/GPU frame-time measurement remain pending.
+
+
+PASS 1.10.0 (2026-11-12): approved vertical leaderboard animation integrated into Lua. 64 offline tests pass, including row spring/reversal continuity, solo fade with previous opponent data retained, curved strip highlight alignment, duration auto-save and renderer resize persistence. Existing gear/aero, race-position, telemetry, scaling, input and config regressions pass. No new CSP APIs. Browser demo and Lua leaderboard contact sheet regenerated. In-game behavior and frame-time target remain pending. New leaderboard_motion.lua is required when upgrading.

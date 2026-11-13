@@ -1,6 +1,6 @@
 # HaloHUD for Assetto Corsa
 
-**Version 1.9.0 · Assetto Corsa + CSP · MIT**
+**Version 1.10.0 · Assetto Corsa + CSP · MIT**
 
 An unofficial, F1-inspired onboard telemetry overlay for Assetto Corsa. It draws a curved teal-and-navy HUD around the cockpit view using a CSP Lua app and original artwork.
 
@@ -81,7 +81,7 @@ python -m venv ../halohud-venv
 ..\halohud-venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-The test harness executes Lua 5.1 through Lupa and mocks CSP interfaces. The current suite has 60 tests; it does not prove native mouse routing, engine integration or GPU performance.
+The test harness executes Lua 5.1 through Lupa and mocks CSP interfaces. The current suite has 68 tests; it does not prove native mouse routing, engine integration or GPU performance.
 
 ### Generate assets, previews and packages
 
@@ -103,6 +103,20 @@ If you have CSP's generated SDK, verify declarations separately:
 ```powershell
 ..\halohud-venv\Scripts\python.exe tests/verify_sdk.py "C:/path/to/assettocorsa/extension/internal/lua-sdk/ac_apps/lib.lua"
 ```
+
+### Publish a release
+
+The [release workflow](.github/workflows/release.yml) runs when you push a version tag such as `v1.10.0`. The tag must match `VERSION` in the app manifest. Add a matching `### 1.10.0 — title` entry under this README’s **Changelog**, then commit your changes before tagging.
+
+The workflow uses that entry’s body as the release description, runs the tests, builds both ZIPs and publishes them. Missing, empty or duplicate changelog entries fail the workflow instead of publishing incorrect notes. Ordinary branch pushes do not create releases. Existing published releases are not edited automatically.
+
+```powershell
+git push origin main
+git tag v1.10.0
+git push origin v1.10.0
+```
+
+Use a new version/tag for each subsequent release.
 
 ### Project layout
 
@@ -132,7 +146,16 @@ The Formula Ultra profile uses available live powertrain data for the exact car 
 
 ## Changelog
 
-Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.9.0. Documentation and publishing changes are tracked separately.
+Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.10.0. Documentation and publishing changes are tracked separately.
+
+### 1.10.0 — animated leaderboard
+
+- Integrated the approved vertical leaderboard transition: player and opponent rows slide between their upper/lower positions, and solo sessions center the player.
+- Attached the player highlight to the animated row using the panel’s shared projected strips and skew.
+- Faded the opponent during row crossover to prevent overlapping names, and retained the previous opponent while fading into solo mode.
+- Preserved motion through rapid reversals and renderer rebuilds, including resizing and HUD dragging.
+- Added the auto-saved **Leaderboard animation** control (`LEADERBOARD_ANIMATION_MS`, default 450 ms, range 200–900 ms).
+- Kept live race classification and existing gear/aero animations unchanged; expanded offline coverage to 64 tests.
 
 ### 1.9.0 — animated gear changes
 

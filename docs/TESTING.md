@@ -210,3 +210,12 @@ Mouse tests use an input mock, so actual CSP mouse capture, UI scaling and click
 ## Gear animation (1.9.0)
 
 Offline checks cover forward/backward slide convergence, interruption continuity, N/R peak swap and 30% scale, queued reversal, resize persistence and duration auto-save. In AC, check rapid sequential/skipped shifts, N/R toggles, different gear counts, Ctrl+H, drag/scale changes and live telemetry agreement. Check 150/260/600 ms timings; N/R uses twice the configured duration. In-game frame time and native integration remain pending.
+
+
+## Leaderboard animation (1.10.0)
+
+Player and opponent rows slide vertically between the existing race-leader/following layouts. Solo fades the opponent out and centers the player. The player highlight uses the same skew/curvature as the timing panel and follows the row. A brief opponent fade avoids overlapping names during crossover. Motion state survives layout rebuilds; live/demo mode changes reset it.
+
+LEADERBOARD_ANIMATION_MS defaults to 450 ms and is clamped to 200–900 ms. The **Leaderboard animation** slider applies live and auto-saves. Race classification remains sampled at 4 Hz, while animation updates each graphics frame with a 50 ms hitch cap.
+
+Offline regression coverage includes swap/reversal continuity, solo fade with cached opponent data, highlight projection, resize persistence and duration saving. In AC, verify P1/P2 changes, solo/multiplayer transitions, missing opponents, rapid reversals, all panel scales, Ctrl+H and frame time. Native integration and CPU/GPU cost remain pending.
