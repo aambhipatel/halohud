@@ -1,4 +1,4 @@
-642751cf5b8cc70f04787ff0017864f17a0d586dc2d9132f8e7b46408a8461a6  .github/workflows/release.yml
+c1a255af5eba2fe0b760ef768fcecb47efc0c78470b34cf1f92c8c7508b80911  .github/workflows/release.yml
 ae8002c6e4906f1b2833af9574550b2133065680499d61fb01a3bbed543fe497  .gitignore
 27aed85697d35969a036a77be01686fb24fb3eac2cca2e03d15dbc23390333da  apps/lua/HaloHUD/aero.lua
 31e0a57a4043836da586fbbd2a7f2a6a2a9bc4247f51c5e7e3209b19792c09cb  apps/lua/HaloHUD/assets/battery.png
