@@ -108,7 +108,7 @@ If you have CSP's generated SDK, verify declarations separately:
 
 The [release workflow](.github/workflows/release.yml) runs when you push a version tag such as `v1.10.0`. The tag must match `VERSION` in the app manifest. Add a matching `### 1.10.0 — title` entry under this README’s **Changelog**, then commit your changes before tagging.
 
-The workflow uses that entry’s body as the release description, runs the tests, builds both ZIPs and publishes them. Missing, empty or duplicate changelog entries fail the workflow instead of publishing incorrect notes. Ordinary branch pushes do not create releases. Existing published releases are not edited automatically.
+The workflow uses that entry’s body as the release description, runs the tests, builds both ZIPs and publishes them. Missing, empty or duplicate changelog entries fail the workflow instead of publishing incorrect notes. Ordinary branch pushes do not create releases. Assets are uploaded to a draft before publication, with retries for upload failures. An existing draft can be resumed; published releases are never overwritten automatically.
 
 ```powershell
 git push origin main
@@ -117,6 +117,8 @@ git push origin v1.10.0
 ```
 
 Use a new version/tag for each subsequent release.
+
+If an upload fails, push any workflow fix to `main`, then open **Actions → Publish release → Run workflow**, select `main` and enter the existing tag. The workflow checks out that tag’s app files and uses the updated workflow to resume its draft. Rerunning an old failed run uses its old workflow definition. If the release is already published, inspect its assets and immutable status first; use a new version for a replacement when the existing release cannot be changed.
 
 ### Project layout
 

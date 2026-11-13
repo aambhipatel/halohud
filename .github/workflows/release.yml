@@ -5,19 +5,29 @@ on:
     tags:
       - "v*"
 
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing version tag to release or retry (for example v1.10.0)"
+        required: true
+        type: string
+
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-python@v7
         with:
@@ -32,7 +42,7 @@ jobs:
 
       - name: Check tag matches app version
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           python - <<'PY'
           import configparser, os
@@ -46,7 +56,7 @@ jobs:
 
       - name: Extract release description from README changelog
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: python source/extract_release_notes.py "$RELEASE_TAG" --output dist/release-notes.md
 
       - name: Run tests
@@ -55,14 +65,56 @@ jobs:
       - name: Build packages
         run: python source/build_package.py
 
-      - name: Publish release with ZIP downloads
+      - name: Upload ZIPs to draft, then publish
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" \
-            dist/*-install.zip \
-            dist/*-complete.zip \
-            --verify-tag \
+          set -euo pipefail
+          gh --version
+          shopt -s nullglob
+          install=(dist/*-install.zip)
+          complete=(dist/*-complete.zip)
+          if [[ ${#install[@]} -ne 1 || ${#complete[@]} -ne 1 ]]; then
+            echo "Expected exactly one install ZIP and one complete ZIP."
+            exit 1
+          fi
+
+          if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft'); then
+            if [[ "$draft" != "true" ]]; then
+              echo "Release $RELEASE_TAG is already published. Refusing to overwrite it."
+              echo "For an incomplete published release, check its state and use a new version if immutable."
+              exit 1
+            fi
+          else
+            gh release create "$RELEASE_TAG" \
+              --verify-tag \
+              --draft \
+              --title "HaloHUD for Assetto Corsa $RELEASE_TAG" \
+              --notes-file dist/release-notes.md
+          fi
+
+          # Resume only drafts. Never delete/recreate a published release or tag.
+          gh release edit "$RELEASE_TAG" \
             --title "HaloHUD for Assetto Corsa $RELEASE_TAG" \
             --notes-file dist/release-notes.md
+
+          uploaded=false
+          for attempt in 1 2 3; do
+            if gh release upload "$RELEASE_TAG" "${install[0]}" "${complete[0]}" --clobber; then
+              uploaded=true
+              break
+            fi
+            if [[ "$attempt" -lt 3 ]]; then
+              echo "Asset upload failed; retrying in $((attempt * 5)) seconds."
+              sleep "$((attempt * 5))"
+            fi
+          done
+          if [[ "$uploaded" != "true" ]]; then
+            echo "Upload failed. Release remains a draft; rerun this workflow after investigating the error."
+            exit 1
+          fi
+
+          # All expected files uploaded successfully before the release is made public.
+          gh release edit "$RELEASE_TAG" --draft=false
