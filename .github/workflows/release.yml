@@ -1,0 +1,63 @@
+name: Publish release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.10"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Install dependencies
+        run: python -m pip install -r source/requirements.txt
+
+      - name: Check tag matches app version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import configparser, os
+          config = configparser.ConfigParser()
+          config.read("apps/lua/HaloHUD/manifest.ini")
+          expected = "v" + config["ABOUT"]["VERSION"].strip()
+          assert os.environ["RELEASE_TAG"] == expected, (
+              f"Tag must match manifest version: {expected}"
+          )
+          PY
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build packages
+        run: python source/build_package.py
+
+      - name: Publish release with ZIP downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            dist/*-install.zip \
+            dist/*-complete.zip \
+            --verify-tag \
+            --title "HaloHUD for Assetto Corsa $RELEASE_TAG" \
+            --generate-notes
