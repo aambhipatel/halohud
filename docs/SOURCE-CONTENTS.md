@@ -3275,7 +3275,7 @@ ROOT=Path(__file__).resolve().parents[1]
 APP=ROOT/'apps/lua/HaloHUD'
 
 EXCLUDED_DIRS={'.git','.venv','venv','__pycache__','.pytest_cache','.mypy_cache',
-               '.vscode','.idea','htmlcov','dist'}
+               '.vscode','.idea','htmlcov','dist','.release-tools'}
 def publishable(p):
     rel=p.relative_to(ROOT)
     return not any(part in EXCLUDED_DIRS for part in rel.parts) and not (
@@ -3309,8 +3309,8 @@ def main():
     (ROOT/'FILES.sha256').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+
         p.relative_to(ROOT).as_posix()+'\n' for p in allfiles),encoding='utf-8')
     output=ROOT/'dist'; output.mkdir(exist_ok=True)
-    complete=output/(ROOT.name+'-complete.zip')
-    install=output/(ROOT.name+'-install.zip')
+    complete=output/'HaloHUD-complete.zip'
+    install=output/'HaloHUD-install.zip'
     with zipfile.ZipFile(complete,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:
         for p in sorted(allfiles+[ROOT/'FILES.sha256']): z.write(p,ROOT.name+'/'+p.relative_to(ROOT).as_posix())
     with zipfile.ZipFile(install,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as z:

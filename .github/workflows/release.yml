@@ -54,6 +54,32 @@ jobs:
           )
           PY
 
+      # Keep app/test sources from the release tag, but use the packaging fix
+      # committed alongside this workflow, including during old-tag recovery.
+      - name: Check out current packaging tool
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-tools
+          sparse-checkout: source/build_package.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Prepare clean release output
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          root = Path.cwd().resolve()
+          output = root / "dist"
+          assert output.resolve().parent == root
+          if output.exists():
+              shutil.rmtree(output)
+          output.mkdir()
+          shutil.copy2(root / ".release-tools/source/build_package.py",
+                       root / "source/build_package.py")
+          PY
+
       - name: Extract release description from README changelog
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -63,7 +89,20 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       - name: Build packages
-        run: python source/build_package.py
+        run: |
+          python source/build_package.py
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          print("Generated files:")
+          for path in sorted(Path("dist").iterdir()):
+              print(f"  {path.name}: {path.stat().st_size} bytes")
+          for name in ("HaloHUD-install.zip", "HaloHUD-complete.zip"):
+              path = Path("dist") / name
+              assert path.is_file(), f"Missing expected asset: {path}"
+              with zipfile.ZipFile(path) as archive:
+                  assert archive.testzip() is None
+          PY
 
       - name: Upload ZIPs to draft, then publish
         env:
@@ -73,13 +112,15 @@ jobs:
         run: |
           set -euo pipefail
           gh --version
-          shopt -s nullglob
-          install=(dist/*-install.zip)
-          complete=(dist/*-complete.zip)
-          if [[ ${#install[@]} -ne 1 || ${#complete[@]} -ne 1 ]]; then
-            echo "Expected exactly one install ZIP and one complete ZIP."
-            exit 1
-          fi
+          install=(dist/HaloHUD-install.zip)
+          complete=(dist/HaloHUD-complete.zip)
+          for asset in "${install[0]}" "${complete[0]}"; do
+            if [[ ! -f "$asset" ]]; then
+              echo "Missing expected release ZIP: $asset"
+              ls -la dist || true
+              exit 1
+            fi
+          done
 
           if draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft'); then
             if [[ "$draft" != "true" ]]; then

@@ -118,7 +118,7 @@ git push origin v1.10.0
 
 Use a new version/tag for each subsequent release.
 
-If an upload fails, push any workflow fix to `main`, then open **Actions → Publish release → Run workflow**, select `main` and enter the existing tag. The workflow checks out that tag’s app files and uses the updated workflow to resume its draft. Rerunning an old failed run uses its old workflow definition. If the release is already published, inspect its assets and immutable status first; use a new version for a replacement when the existing release cannot be changed.
+If an upload fails, push any workflow fix to `main`, then open **Actions → Publish release → Run workflow**, select `main` and enter the existing tag. The workflow checks out that tag’s app files, uses the packaging tool from the workflow revision, and starts with a clean output folder before resuming its draft. Release assets have fixed names: HaloHUD-install.zip and HaloHUD-complete.zip. Rerunning an old failed run uses its old workflow definition. If the release is already published, inspect its assets and immutable status first; use a new version for a replacement when the existing release cannot be changed.
 
 ### Project layout
 
