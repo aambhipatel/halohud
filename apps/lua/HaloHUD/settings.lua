@@ -6,6 +6,7 @@ M.schema={
   leftScale={'LEFT_SCALE',1,0.5,1.5}, dialScale={'DIAL_SCALE',1,0.5,1.5},
   moduleScale={'MODULE_SCALE',1,0.5,1.5}, rightScale={'RIGHT_SCALE',1,0.5,1.5},
   outerArc={'OUTER_ARC',false}, aeroDuration={'AERO_ANIMATION_MS',420,150,1000},
+  gearDuration={'GEAR_ANIMATION_MS',260,150,600},
   profileCPU={'PROFILE_CPU',false}, units={'UNITS','KMH'}, names={'DRIVER_NAMES','FULL'},
   theme={'THEME','TEAL'}, demo={'DEMO','AUTO'}, damping={'PEDAL_DAMPING_MS',70,1,500},
   energyDamping={'ENERGY_DAMPING_MS',70,60,80}, recoveryMax={'RECOVERY_MAX_RATE',0.10,0.001,10},

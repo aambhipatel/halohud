@@ -205,3 +205,8 @@ Mouse tests use an input mock, so actual CSP mouse capture, UI scaling and click
 - Offline: 56 tests cover equal-length pedal masks, bottom-up segment order, continuous empty/half/full energy fills, distinct battery colors/cropping, and existing scale/drag/visibility/telemetry regressions.
 - In game: check the close energy/dial gap, fitted pedal borders, lower labels and DEPLOY spacing at normal and extreme dial/module scales. Verify brake/throttle, recharge/deploy and battery at 0/50/100% against live telemetry.
 - Check the depleted/charged battery contrast over gray and bright liveries. Check Ctrl+H and drag positioning. Measure warmed-up CPU/GPU frame time; performance and native integration remain unverified offline.
+
+
+## Gear animation (1.9.0)
+
+Offline checks cover forward/backward slide convergence, interruption continuity, N/R peak swap and 30% scale, queued reversal, resize persistence and duration auto-save. In AC, check rapid sequential/skipped shifts, N/R toggles, different gear counts, Ctrl+H, drag/scale changes and live telemetry agreement. Check 150/260/600 ms timings; N/R uses twice the configured duration. In-game frame time and native integration remain pending.

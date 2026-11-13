@@ -299,13 +299,28 @@ function M.new(cfg, width, height)
       q[6],q[7],q[8],q[9]=vec2(0,0),vec2(1,0),vec2(1,1),vec2(0,1)
       self.draw(q,aeroColor)
     end
+    local position=t.gearPosition
+    if position~=nil then
+      position=math.max(0,math.min(gearCount,position))
+      local u=454+position*gearStep
+      -- Use the same projected quad as the existing gear row, moving continuously.
+      local q=position==math.floor(position) and self.gears[position] or
+        self.quad(u-gearBox/2,-24,gearBox,43)
+      self.draw(q,c.accent,.32)
+    end
     for gear=0,gearCount do
       local u=454+gear*gearStep
       local reverse=gear==0 and t.gear==-1
       local selected=t.gear==gear or reverse
-      if selected then self.draw(self.gears[gear],c.accent,.32) end
-      self.text(gear==0 and (reverse and 'R' or 'N') or tostring(gear),u,-12,selected and 25 or 20,
-        selected and c.white or c.dim,nil,'center',gearStep-5)
+      if position==nil and selected then self.draw(self.gears[gear],c.accent,.32) end
+      local weight=position~=nil and math.max(0,1-math.abs(gear-position)) or (selected and 1 or 0)
+      local size=20+5*weight
+      local pulse=gear==0 and (t.slotScale or 1) or 1
+      local label=gear==0 and (t.slotLetter or (reverse and 'R' or 'N')) or tostring(gear)
+      local color=rgbm(c.dim.r+(c.white.r-c.dim.r)*weight,
+        c.dim.g+(c.white.g-c.dim.g)*weight,c.dim.b+(c.white.b-c.dim.b)*weight,opacity)
+      -- Expand about the glyph center instead of shifting its baseline down.
+      self.text(label,u,-12-size*(pulse-1)/2,size*pulse,color,nil,'center',(gearStep-5)*pulse)
     end
     if t.gear>gearCount then self.text(t.gear,820,26,24,c.white,nil,'center') end
     local rpm=math.max(0,math.min(1,t.rpm/cfg.rpmMax))*48

@@ -1,6 +1,6 @@
 # HaloHUD for Assetto Corsa
 
-**Version 1.8.0 · Assetto Corsa + CSP · MIT**
+**Version 1.9.0 · Assetto Corsa + CSP · MIT**
 
 An unofficial, F1-inspired onboard telemetry overlay for Assetto Corsa. It draws a curved teal-and-navy HUD around the cockpit view using a CSP Lua app and original artwork.
 
@@ -81,7 +81,7 @@ python -m venv ../halohud-venv
 ..\halohud-venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-The test harness executes Lua 5.1 through Lupa and mocks CSP interfaces. The current suite has 56 tests; it does not prove native mouse routing, engine integration or GPU performance.
+The test harness executes Lua 5.1 through Lupa and mocks CSP interfaces. The current suite has 60 tests; it does not prove native mouse routing, engine integration or GPU performance.
 
 ### Generate assets, previews and packages
 
@@ -132,7 +132,15 @@ The Formula Ultra profile uses available live powertrain data for the exact car 
 
 ## Changelog
 
-Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.8.0. Documentation and publishing changes are tracked separately.
+Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.9.0. Documentation and publishing changes are tracked separately.
+
+### 1.9.0 — animated gear changes
+
+- Added a smooth gear-selection highlight that slides right on upshifts and left on downshifts along the projected gear row.
+- Preserved position and velocity during rapid shifts/reversals and layout rebuilds; nearby digit size and brightness blend with the sliding highlight.
+- Added the approved N ↔ R pulse: 30% enlargement, letter swap at the peak, then a smooth return to normal size while the highlight stays in the first slot.
+- Added the auto-saved **Gear animation** control (`GEAR_ANIMATION_MS`, default 260 ms, range 150–600 ms). The N/R pulse lasts twice this duration: 520 ms by default.
+- Kept raw gear telemetry and saved layout settings unchanged; expanded offline coverage to 60 tests.
 
 ### 1.8.0 — curved gauges and battery contrast
 
