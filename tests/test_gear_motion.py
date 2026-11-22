@@ -57,6 +57,6 @@ class GearMotionTests(unittest.TestCase):
 
     def test_duration_control_auto_saves(self):
         h=Harness();h.frame(0)
-        h.lua.execute("ui.slider=function(label,v) return label=='Gear animation' and 400 or v end;script.windowMain()")
+        h.lua.execute("ui.slider=function(label,v) return label=='##gearDuration' and 0.4 or v end;script.windowMain()")
         h.frame(.41)
         self.assertEqual(float(h.ini['HUD']['GEAR_ANIMATION_MS']),400)

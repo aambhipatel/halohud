@@ -43,7 +43,7 @@ class LeaderboardMotionTests(unittest.TestCase):
 
     def test_duration_control_auto_saves(self):
         h=Harness();h.frame(0)
-        h.lua.execute("ui.slider=function(label,v) return label=='Leaderboard animation' and 650 or v end;script.windowMain()")
+        h.lua.execute("ui.slider=function(label,v) return label=='##leaderboardDuration' and 0.65 or v end;script.windowMain()")
         h.frame(.41)
         self.assertEqual(float(h.ini['HUD']['LEADERBOARD_ANIMATION_MS']),650)
 

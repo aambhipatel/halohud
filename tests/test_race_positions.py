@@ -34,7 +34,7 @@ class RacePositionTests(unittest.TestCase):
         ''')
 
     def test_app_ignores_player_first_board_in_bot_race(self):
-        h=Harness(demo='AUTO');messages=[]
+        h=Harness(demo='AUTO',overrides={'DEBUG_MODE':1});messages=[]
         h.lua.globals().recordText=messages.append
         h.lua.execute('''
           player={index=0,racePosition=3,driverName=function() return 'Player Test' end}
@@ -43,7 +43,8 @@ class RacePositionTests(unittest.TestCase):
           ac.getSim=function() return {carsCount=3,currentSessionIndex=0,raceSessionType=3} end
           ac.getSession=function() return {type=3,leaderboard={[0]={car=player}}} end
           ac.getCar=function(i) return ({[0]=player,[1]=leader,[2]=ahead})[i] end
-          ui.text=recordText
+          controlTab='Advanced';openControlSections={['Live telemetry']=true}
+          ui.textWrapped=recordText
         ''')
         h.frame(0.25);h.lua.globals().script.windowMain()
         self.assertIn('Position 3 | Ahead 2 AHEAD',messages)

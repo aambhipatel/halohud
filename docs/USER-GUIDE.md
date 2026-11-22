@@ -4,11 +4,11 @@ Curved Lua HUD for original Assetto Corsa with Content Manager and **CSP 0.2.0+ 
 
 ![Current HUD](../previews/HaloHUD-detail.png)
 
-## Version 1.7: reposition with the mouse
+## Reposition the HUD
 
-Open **HaloHUD controls**, enable **Drag HUD with mouse**, then hold the left mouse button on the **Drag HUD** handle above the center dial and move it. You can close the controls window while dragging. Turn the option off when finished. The edit mode starts off on each app launch and Reset exits it.
+With the in-game cursor visible, left-drag the HUD body. You can close the controls window while dragging. Double-click the HUD to reset its position. **General → Lock HUD position** disables both mouse gestures. The offsets in the HUD tab still work while locked.
 
-Dragging updates the same X_OFFSET/Y_OFFSET values as the sliders and auto-saves to config.ini after 0.4 seconds without movement. Save still writes immediately. Movement uses the actual fitted HUD scale, and stops at the screen margin; reversing at an edge moves immediately. The HUD itself remains click-through; only the small handle accepts mouse input during edit mode. Ctrl+H hides both. Existing settings and artwork are unchanged.
+Dragging updates the existing X_OFFSET and Y_OFFSET settings in design pixels. The fitted HUD stays inside a screen margin. Release starts the 0.4-second save timer. Ctrl+H hides the HUD and ends a drag. See [mouse controls and migration](CONTROLS.md#mouse-controls) for more detail.
 
 ## Version 1.6: approved brake, battery and leader layout
 
@@ -140,7 +140,7 @@ All API names were rechecked against the **generated CSP 0.2.0 SDK**, including 
 
 ## Demo, sources and assets
 
-Open **Demo.html** directly in a browser for an embedded 16-second synthetic loop, pause/scrub/background controls included. It records the actual Lua app at 12 snapshots/sec; the game app updates every graphics frame. DEMO is 8 design pixels and 45% alpha above the dial. Inside AC use Force demo or DEMO=ON. AUTO handles a missing-car state; ordinary AC app loading still requires a session.
+Open **Demo.html** directly in a browser for an embedded 16-second synthetic loop, pause/scrub/background controls included. It records the actual Lua app at 12 snapshots/sec; the game app updates every graphics frame. DEMO is 8 design pixels and 45% alpha above the dial. Inside AC enable Debug Mode, then use Force demo or DEMO=ON. AUTO handles a missing-car state; ordinary AC app loading still requires a session.
 
 Runtime files live in apps/lua/HaloHUD: manifest.ini, HaloHUD.lua, config.ini, settings.lua, telemetry.lua, renderer.lua, aero.lua, generated glyphs.lua, assets, icon and license notices. The complete package also contains source, OFL fonts, tests, camera examples, inspection reports, previews, full text contents in SOURCE-CONTENTS.md and integrity hashes in FILES.sha256. No original car assets/scripts are redistributed.
 
@@ -205,3 +205,29 @@ Player and opponent rows slide vertically between the existing race-leader/follo
 LEADERBOARD_ANIMATION_MS defaults to 450 ms and is clamped to 200–900 ms. The **Leaderboard animation** slider applies live and auto-saves. Race classification remains sampled at 4 Hz, while animation updates each graphics frame with a 50 ms hitch cap.
 
 Offline regression coverage includes swap/reversal continuity, solo fade with cached opponent data, highlight projection, resize persistence and duration saving. In AC, verify P1/P2 changes, solo/multiplayer transitions, missing opponents, rapid reversals, all panel scales, Ctrl+H and frame time. Native integration and CPU/GPU cost remain pending.
+
+
+## DRS entry chime
+
+Add a WAV to `<Assetto Corsa>/apps/lua/HaloHUD/sounds/`. Name it `drs_chime.wav` or choose an existing file in the **DRS WAV file** picker. Enable **DRS chime** in HaloHUD controls. The app scans the folder on configuration load; **Reload config.ini** rescans and reopens the selected file. Save any pending controls edits first. Audio files in this folder are for local use and excluded from releases. The DRS Chime tab shows a warning when the selected sound is unavailable. Enable Debug Mode in General to see track, car, suppression and override details.
+
+Start with a **44.1 kHz, 16-bit integer PCM, mono WAV**. Keep it **100–300 ms with no leading silence**. The CSP 0.2.0 SDK exposes file-based audio but does not specify which WAV encodings, bit depths, channel layouts or sample rates its loader accepts. FMOD documents WAV/PCM support and resampling, which supports this conservative export recommendation. CSP playback of this exact format, 48 kHz, stereo and other variants has yet to be tested in-game. [FMOD sound formats](https://www.fmod.com/docs/2.04/api/core-api-sound.html) · [FMOD resampling](https://www.fmod.com/docs/2.04/api/using-dsp-effects-in-the-core-api.html)
+
+In-game logs showed that CSP consumed the one-shot event after playback. The next `isValid()` check on the same object returned false. HaloHUD now creates a fresh non-looping 2D event for each chime, with the interior, exterior and track camera multipliers set to 1. It holds the event through playback and calls the SDK’s `dispose()` method to stop and remove it before the next play or during cleanup. Rapid clicks restart the sound from the beginning without stacking. File existence, size and WAV format are checked on load or file selection. Use **Reload config.ini** if you replace a file in place. The HaloHUD volume slider sets linear gain on the event before `start()`. With Debug Mode and DRS debug logging on, HaloHUD logs the requested, pre-start and post-start gains plus the camera multipliers. If `start()` resets gain or a camera multiplier, HaloHUD restores it on that same event. The CSP SDK does not specify how file audio routes through Assetto Corsa’s Master slider. [FMOD mixer glossary](https://www.fmod.com/docs/2.04/api/glossary.html)
+
+| Config key | Default | Meaning |
+|---|---|---|
+| `DRS_CHIME_ENABLED` | `0` | Opt in through **DRS chime**. |
+| `DRS_CHIME_VOLUME` | `0.65` | Event volume from 0 to 1. |
+| `DRS_TRIGGER_MODE` | `AUTO` | `AUTO` uses game availability. `SPLINE` uses forward crossings of track activation lines. |
+| `DRS_SOUND` | `drs_chime.wav` | Filename inside `sounds/`, preserving case. |
+| `DRS_COOLDOWN_SECONDS` | `1.5` | Minimum time between cues; clamped to 1.5–10 s. |
+| `DRS_ACTIVATION_MARGIN_M` | `40` | Margin converted to spline units using the track length. |
+| `DRS_FREE_USE_SECONDS` | `2` | Continuous availability outside all zones and margins before classifying as free-use. |
+| `DRS_FORCE_ON`, `DRS_FORCE_OFF` | empty | Comma- or space-separated car folder IDs. Force-off wins conflicts. Force-on selects spline mode for that car. The cue skips the availability and classification gates and still requires DRS support, zone data and a valid forward crossing. |
+| `DEBUG_MODE` | `0` | Reveal diagnostics and enable their saved preferences. |
+| `DEBUG_DRS` | `0` | Enable DRS event logs while Debug Mode is on. |
+
+**DRS availability (auto)** waits for `drsAvailable` to rise. **Zone entry (spline)** cues at a forward crossing of `START`, even when the game denies DRS. It needs readable zone data and stays quiet on a seeded in-zone frame, a reset, or a crossing during cooldown. With zone data the edge must occur inside a zone or near `START`. `DETECTION` is the earlier eligibility point. `START`/`END` are inclusive and may wrap the starting line. A track layout file takes precedence over the base track file. The margin also tolerates lag just beyond `END` when evaluating outside-zone evidence.
+
+Classification is cached by car folder ID for the session. Stationary or pit-lane availability is eligible evidence only after a seed frame, five seconds of reset grace and a continuous dwell outside known zones and their margins. Stationary evidence also requires valid on-track movement since the reset. Grid placement cannot satisfy that requirement, and pre-session telemetry never contributes to the dwell. Availability outside all zones for the configured interval also marks it `free_use` for the rest of the session. With no readable zones, a clean moving edge can play while classification is unknown. Continuous availability covering 35% of a lap or lasting 45 seconds marks the car as free-use. If a custom car mimics a valid edge before enough evidence exists, use `DRS_FORCE_OFF` for that car. Unavailable physics or missing DRS support leaves the cue silent. Replay, pause, pit resets, AI control, and spectating another car suppress it. The chime reads the player car only. Reloading settings preserves the session classification; restarting a session clears it.

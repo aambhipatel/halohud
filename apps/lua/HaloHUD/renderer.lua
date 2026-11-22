@@ -16,6 +16,8 @@ function M.new(cfg, width, height)
   local self={cfg=cfg, static={}, textCache={}, cacheCount=0, quads=0}
   local theme=themes[cfg.theme] or themes.TEAL
   local opacity=cfg.opacity
+  local left,center,right=cfg.showLeft~=false,cfg.showCenter~=false,cfg.showRight~=false
+  self.visible=left or center or right or cfg.outerArc
   self.c={accent=rgba(theme.accent,opacity), dim=rgba(theme.secondary,opacity),
     blue=rgba(theme.blue,opacity), green=rgba(theme.green,opacity),
     white=rgba({255,255,255},opacity), glass=rgba({255,255,255},opacity),
@@ -48,22 +50,37 @@ function M.new(cfg, width, height)
   end
   local arcEnd=sideInner+522*math.max(ls,rs)
   local arcV=-math.max(196,180*ds+20,150*math.max(ls,rs,ms)+20)
-  -- Conservative region envelopes include dynamic labels and battery.
-  -- Fit the complete composition, then clamp offsets so controls cannot clip it.
+  -- Fit the complete composition so toggling a zone never moves the others.
+  -- Keep each projected envelope for hit testing only the visible regions.
   local minX,maxX,minY,maxY=0,0,0,0
-  local function bounds(u,v,flat,g)
-    local x,y=localPoint(u,v,flat,g)
-    minX=math.min(minX,x);maxX=math.max(maxX,x)
-    minY=math.min(minY,y);maxY=math.max(maxY,y)
+  local hitRegions={}
+  local function envelope(u0,u1,v0,v1,group,visible,steps)
+    local x0,x1,y0,y1=math.huge,-math.huge,math.huge,-math.huge
+    for i=0,steps do
+      local u=u0+(u1-u0)*i/steps
+      local x,y=localPoint(u,v0,group=='dial',group)
+      x0,x1,y0,y1=math.min(x0,x),math.max(x1,x),math.min(y0,y),math.max(y1,y)
+      x,y=localPoint(u,v1,group=='dial',group)
+      x0,x1,y0,y1=math.min(x0,x),math.max(x1,x),math.min(y0,y),math.max(y1,y)
+    end
+    minX,maxX,minY,maxY=math.min(minX,x0),math.max(maxX,x1),math.min(minY,y0),math.max(maxY,y1)
+    if visible then hitRegions[#hitRegions+1]={left=x0,right=x1,top=y0,bottom=y1} end
   end
-  for _,r in ipairs({{-840,-318,-145,130,'left'}, {318,840,-100,130,'right'},
-      {-310,-160,-150,150,'curvedModule'}, {160,310,-150,150,'curvedModule'},
-      {-184,184,-205,230,'dial'}}) do
-    for i=0,64 do for _,v in ipairs({r[3],r[4]}) do
-      bounds(r[1]+(r[2]-r[1])*i/64,v,r[5]=='dial',r[5])
-    end end
+  envelope(-840,-318,-145,130,'left',left,64)
+  envelope(318,840,-100,130,'right',right,64)
+  envelope(-310,-160,-150,150,'curvedModule',center,64)
+  envelope(160,310,-150,150,'curvedModule',center,64)
+  envelope(-184,184,-205,230,'dial',center,64)
+  if cfg.outerArc then
+    envelope(-arcEnd,arcEnd,arcV,arcV,'arc',false,96)
+    -- Narrow hit regions follow the arc instead of covering the open space below it.
+    for i=0,23 do
+      local u=-arcEnd+2*arcEnd*i/24
+      local x0,y0=localPoint(u,arcV,false,'arc')
+      local x1,y1=localPoint(u+2*arcEnd/24,arcV,false,'arc')
+      hitRegions[#hitRegions+1]={left=x0,right=x1,top=math.min(y0,y1)-8,bottom=math.max(y0,y1)+8}
+    end
   end
-  if cfg.outerArc then for i=0,96 do bounds(-arcEnd+2*arcEnd*i/96,arcV,false,'arc') end end
   local s=math.min(math.min(width/1920,height/1080)*cfg.scale,
     (width-32)/(maxX-minX),(height-32)/(maxY-minY))
   local ox=math.max(16-minX*s,math.min(width-16-maxX*s,width/2+cfg.x*s))
@@ -74,7 +91,11 @@ function M.new(cfg, width, height)
   end
   -- Mouse deltas use CSP UI pixels. Convert through the actual fitted scale,
   -- and start from the visible position (not a previously clamped request).
-  self.drag={anchor=self.point(0,-214,true),scale=s,
+  for _,r in ipairs(hitRegions) do
+    r.left,r.right=ox+r.left*s,ox+r.right*s
+    r.top,r.bottom=oy+r.top*s,oy+r.bottom*s
+  end
+  self.drag={regions=hitRegions,scale=s,left=ox+minX*s,right=ox+maxX*s,top=oy+minY*s,bottom=oy+maxY*s,
     x=(ox-width/2)/s,y=(oy-height/2)/s+5,
     minX=math.max(-960,(16-minX*s-width/2)/s),
     maxX=math.min(960,(width-16-maxX*s-width/2)/s),
@@ -160,28 +181,36 @@ function M.new(cfg, width, height)
   local originalDraw=self.draw
   self.draw=function(q,color,alpha) self.static[#self.static+1]={q,color,alpha} end
   local c=self.c; local n=cfg.strips
-  self.image('assets/left_fill.png',-830,-92,512,192,c.glass,false,n)
-  self.image('assets/left_rim.png',-830,-92,512,192,c.accent,false,n)
-  self.image('assets/right_fill.png',318,-92,512,192,c.glass,false,n)
-  self.image('assets/right_rim.png',318,-92,512,192,c.accent,false,n)
-  for side=1,2 do
-    self.draw(gaugeQuad(side,-150,150,'assets/curved_pedal_fill.png'),rgba({18,52,66},opacity))
-    self.draw(gaugeQuad(side,-150,150,'assets/curved_pedal_rim.png'),c.accent)
-    self.draw(gaugeQuad(side,-150,150,'assets/curved_energy_rim.png'),rgba({50,150,194},opacity))
-    self.draw(gaugeQuad(side,-150,150,'assets/curved_energy_fill.png'),rgba({10,50,112},opacity))
+  if left then
+    self.image('assets/left_fill.png',-830,-92,512,192,c.glass,false,n)
+    self.image('assets/left_rim.png',-830,-92,512,192,c.accent,false,n)
   end
-  self.text('BRAKE',-246,127,12,c.dim,nil,'center',nil,false,1,'curvedModule')
-  self.text('THROTTLE',246,127,12,c.dim,nil,'center',nil,false,1,'curvedModule')
-  self.image('assets/dial_fill.png',-180,-180,360,360,c.glass,true)
-  self.image('assets/dial_rim.png',-180,-180,360,360,c.accent,true)
-  self.text('ACTIVE',347,-62,12,c.white)
-  self.text('AERO',347,-44,12,c.white)
-  self.text('GEARS',620,-57,12,c.dim,nil,'center')
-  self.text('RPM x1000',624,108,12,c.dim,nil,'center')
-  for i=0,15 do
-    local u=430+i*24
-    self.rect(u,62,1.2,5,c.dim)
-    if i%3==0 then self.text(string.format('%g',i*cfg.rpmMax/15000),u,72,9,c.dim,nil,'center') end
+  if right then
+    self.image('assets/right_fill.png',318,-92,512,192,c.glass,false,n)
+    self.image('assets/right_rim.png',318,-92,512,192,c.accent,false,n)
+  end
+  if center then
+    for side=1,2 do
+      self.draw(gaugeQuad(side,-150,150,'assets/curved_pedal_fill.png'),rgba({18,52,66},opacity))
+      self.draw(gaugeQuad(side,-150,150,'assets/curved_pedal_rim.png'),c.accent)
+      self.draw(gaugeQuad(side,-150,150,'assets/curved_energy_rim.png'),rgba({50,150,194},opacity))
+      self.draw(gaugeQuad(side,-150,150,'assets/curved_energy_fill.png'),rgba({10,50,112},opacity))
+    end
+    self.text('BRAKE',-246,127,12,c.dim,nil,'center',nil,false,1,'curvedModule')
+    self.text('THROTTLE',246,127,12,c.dim,nil,'center',nil,false,1,'curvedModule')
+    self.image('assets/dial_fill.png',-180,-180,360,360,c.glass,true)
+    self.image('assets/dial_rim.png',-180,-180,360,360,c.accent,true)
+  end
+  if right then
+    self.text('ACTIVE',347,-62,12,c.white)
+    self.text('AERO',347,-44,12,c.white)
+    self.text('GEARS',620,-57,12,c.dim,nil,'center')
+    self.text('RPM x1000',624,108,12,c.dim,nil,'center')
+    for i=0,15 do
+      local u=430+i*24
+      self.rect(u,62,1.2,5,c.dim)
+      if i%3==0 then self.text(string.format('%g',i*cfg.rpmMax/15000),u,72,9,c.dim,nil,'center') end
+    end
   end
   -- Exactly the same image rectangle, strip boundaries, projection and skew
   -- as the timing panel; the alpha mask contains the constant-inset row outline.
@@ -216,10 +245,7 @@ function M.new(cfg, width, height)
   for gear=0,gearCount do self.gears[gear]=self.quad(454+gear*gearStep-gearBox/2,-24,gearBox,43) end
   self.chargeBg=self.quad(-64,178,128,48,'assets/battery.png',nil,true)
 
-  function self.render(t)
-    self.quads=0
-    for i=1,#self.static do local q=self.static[i]; self.draw(q[1],q[2],q[3]) end
-    local board=t.leaderboardMotion
+  local function drawHighlight(t,board)
     if board then
       -- Crop the existing approved mask to the row, and move all projected strips
       -- through the same skew/curve as the panel. Transparent atlas margins are excluded.
@@ -231,6 +257,9 @@ function M.new(cfg, width, height)
     local highlight=self.highlights[t.leaderFirst and 'leader' or t.solo and 'solo' or 'regular']
     for i=1,#highlight do self.draw(highlight[i],c.accent) end
     end
+  end
+
+  local function drawCenter(t)
     for side,value in ipairs({t.brake,t.throttle}) do
       for i=1,PEDAL_SEGMENTS do
         self.draw(self.pedals[side][i],c.inactive)
@@ -280,6 +309,9 @@ function M.new(cfg, width, height)
       if t.charge>0 then self.draw(self.quad(-64,178,128*t.charge,48,'assets/battery.png',{0,0,t.charge,1},true),rgba({46,212,255},opacity)) end
       self.image('assets/bolt.png',-10,186,16,30,c.white,true)
     else self.text('--',0,193,13,c.dim,nil,'center',nil,true) end
+  end
+
+  local function drawRows(t,board)
     if board then
       local alpha=board.opponentAlpha
       if alpha>0.001 then
@@ -306,6 +338,9 @@ function M.new(cfg, width, height)
     self.text(t.player.name,-723,30.5+rowOffset,31,c.white,'names',nil,354)
     end
     end
+  end
+
+  local function drawPowertrain(t)
     -- DRS is a proxy for the reference's active-aero icon, not universal active aero.
     local phase=t.aeroPhase
     if phase==nil then phase=t.aeroActive and 1 or 0 end -- static fixtures
@@ -356,8 +391,20 @@ function M.new(cfg, width, height)
           rgbm((47-4*z)/255,(224+3*z)/255,(208-86*z)/255,opacity*f))
       end
     end
-    if t.demo then self.text('DEMO',0,-188,8,rgba({159,184,200},opacity*0.45),nil,'center',nil,true,2)
-    elseif not t.physics then self.text('PHYSICS N/A',0,244,10,c.dim,nil,'center',nil,true) end
+  end
+
+  function self.render(t)
+    self.quads=0
+    for i=1,#self.static do local q=self.static[i]; self.draw(q[1],q[2],q[3]) end
+    local board=t.leaderboardMotion
+    if left then drawHighlight(t,board) end
+    if center then drawCenter(t) end
+    if left then drawRows(t,board) end
+    if right then drawPowertrain(t) end
+    if center then
+      if t.demo then self.text('DEMO',0,-188,8,rgba({159,184,200},opacity*0.45),nil,'center',nil,true,2)
+      elseif not t.physics then self.text('PHYSICS N/A',0,244,10,c.dim,nil,'center',nil,true) end
+    end
   end
   return self
 end

@@ -39,18 +39,32 @@ class Harness:
           function vec2(x,y) return {x=x or 0,y=y or 0} end
           function rgbm(r,g,b,a) return {r=r,g=g,b=b,mult=a or 1} end
           local inWindow=false
+          controlWidth=520
           ui={
+            StyleColor={WindowBg=2,Text=0}, HoveredFlags={AnyWindow=4}, MouseCursor={ResizeAll=2},
+            childWindow=function(_,_,_,_,body) body() end,
+            tabBar=function(_,_,body) body() end,
+            tabItem=function(name,_,body) if not controlTab or name==controlTab then body() end end,
+            treeNode=function(name,_,body) if not openControlSections or openControlSections[name] then body() end end,
+            pushID=function(value) controlID=value end,popID=function() controlID=nil end,
+            itemHovered=function() return false end,setTooltip=function() end,
+            dummy=function() end,header=function() end,separator=function() end,sameLine=function() end,
+            availableSpaceX=function() return controlWidth end,measureText=function(s) return vec2(#s*8,16) end,
+            inputText=function(_,value) return value end,textDisabled=function() end,
+            setNextItemWidth=function() end,combo=function() end,selectable=function() return false end,
+            styleColor=function() return rgbm(.08,.1,.12,1) end,pushStyleColor=function() end,popStyleColor=function() end,
             beginTransparentWindow=function(id,pos,size,padding,inputs)
               assert(not inWindow, 'Unbalanced window')
-              assert(inputs==false or (inputs==true and id=='HaloHUD:dragHandle'))
+              assert(inputs==false, 'The overlay must stay click-through')
               inWindow=true
             end,
             endTransparentWindow=function() assert(inWindow); inWindow=false end,
             drawImageQuad=function(...) assert(inWindow); py_record(...) end,
             text=function() end, textWrapped=function() end,
-            invisibleButton=function() end, itemActive=function() return false end,
-            mouseDelta=function() return vec2() end, captureMouse=function() end,
-            drawRectFilled=function() end, setCursor=function() end,
+            windowHovered=function() return false end, mousePos=function() return vec2(-1,-1) end,
+            mouseClicked=function() return false end, mouseDoubleClicked=function() return false end,
+            mouseDown=function() return false end, mouseReleased=function() return false end,
+            captureMouse=function() end, setMouseCursor=function() end,
             checkbox=function() return false end, button=function() return false end,
             slider=function(_,v) return v end
           }
@@ -58,14 +72,17 @@ class Harness:
           ac={
             SessionType={Race=3},
             onRelease=function(callback) releaseCallback=callback end,
+            onSessionStart=function(callback) sessionStartCallback=callback end,
             INIConfig={load=function() return {
               get=function(_,s,k,d) return py_ini_get(s,k,d) end,
               set=function(_,s,k,v) py_ini_set(s,k,v) end,
               save=function(_,path) py_ini_save(path) end} end},
             getSim=function() return {carsCount=0,currentSessionIndex=0} end,
             getUI=function() return {windowSize=vec2(py_width,py_height)} end,
+            getAppWindows=function() return {} end,
             getCar=function() return nil end,
             getCarID=function() return 'generic_test_car' end,
+            getTrackFullID=function() return 'mock_track/layout' end,
             getSession=function() return nil end
           }
         ''')

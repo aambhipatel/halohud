@@ -22,7 +22,7 @@ class Version14Tests(unittest.TestCase):
 
     def test_release_flushes_pending_changes(self):
         h=Harness();h.frame()
-        h.lua.execute("ui.slider=function(label,v) if label=='HUD scale' then return 0.75 end return v end")
+        h.lua.execute("ui.slider=function(label,v) if label=='##hudScale' then return 75 end return v end")
         h.lua.globals().script.windowMain()
         self.assertEqual(h.saves,0)
         h.lua.globals().releaseCallback()
@@ -59,7 +59,7 @@ class Version14Tests(unittest.TestCase):
 
     def test_debounced_save_even_if_controls_closed_and_hud_disabled(self):
         h=Harness();h.frame()
-        h.lua.execute("ui.slider=function(label,v) if label=='HUD scale' then return 0.8 end return v end")
+        h.lua.execute("ui.slider=function(label,v) if label=='##hudScale' then return 80 end return v end")
         h.lua.globals().script.windowMain()
         h.frame(0.2);self.assertEqual(h.saves,0)
         # A later change restarts the debounce rather than writing every drag frame.
@@ -72,8 +72,8 @@ class Version14Tests(unittest.TestCase):
         h.frame(1);self.assertEqual(h.saves,1)
 
     def test_demo_profile_and_arc_persist_and_reload(self):
-        h=Harness(demo='AUTO');h.frame()
-        h.lua.execute("ui.checkbox=function(label) return label=='Force demo telemetry' or label=='Outer arc' or label=='Measure Lua CPU time' end")
+        h=Harness(demo='AUTO',overrides={'DEBUG_MODE':1});h.frame()
+        h.lua.execute("ui.checkbox=function(label) return label=='Force demo telemetry' or label=='Show outer arc' or label=='Measure Lua CPU time' end")
         h.lua.globals().script.windowMain();h.frame(0.41)
         self.assertEqual(h.ini['HUD']['DEMO'],'ON')
         self.assertEqual(h.ini['HUD']['PROFILE_CPU'],'1')
@@ -84,16 +84,17 @@ class Version14Tests(unittest.TestCase):
         h.lua.globals().remember=lambda label,value:states.update({label:value})
         h.lua.execute("ui.button=function() return false end;ui.checkbox=function(label,v) remember(label,v);return false end")
         h.lua.globals().script.windowMain()
-        self.assertTrue(states['Force demo telemetry']);self.assertTrue(states['Outer arc'])
+        self.assertTrue(states['Force demo telemetry']);self.assertTrue(states['Show outer arc'])
         self.assertTrue(states['Measure Lua CPU time'])
 
     def test_save_errors_are_visible_and_retried(self):
         h=Harness();h.frame()
-        h.lua.execute("ui.slider=function(label,v) if label=='HUD scale' then return 0.9 end return v end; py_ini_save=function() error('write failure fixture') end")
+        h.lua.execute("ui.slider=function(label,v) if label=='##hudScale' then return 90 end return v end; py_ini_save=function() error('write failure fixture') end")
         h.lua.globals().script.windowMain();h.frame(0.41)
         messages=[];h.lua.globals().ui.textWrapped=messages.append
         h.lua.globals().script.windowMain()
-        self.assertTrue(any('write failure fixture' in m for m in messages))
+        self.assertIn('Could not read or save config.ini.',messages)
+        self.assertFalse(any('write failure fixture' in m for m in messages))
         h.lua.globals().py_ini_save=h.ini_save
         h.frame(2.1);self.assertEqual(h.saves,1)
 

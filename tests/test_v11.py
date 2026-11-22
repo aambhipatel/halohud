@@ -60,7 +60,7 @@ class LayoutTests(unittest.TestCase):
     def test_live_sliders_save_reset_and_other_options(self):
         h=Harness(overrides={'UNITS':'MPH','THEME':'AMBER','ENABLED':1})
         old=h.frame()
-        h.lua.execute("ui.slider=function(label,v) if label=='HUD scale' then return 0.7 elseif label=='Center dial scale' then return 1.3 end return v end")
+        h.lua.execute("ui.slider=function(label,v) if label=='##hudScale' then return 70 elseif label=='##dialScale' then return 130 end return v end")
         h.lua.globals().script.windowMain()
         self.assertNotEqual(old,h.frame())
         h.lua.execute("ui.button=function(label) return label=='Save config.ini' end")
@@ -70,13 +70,15 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(float(h.ini['HUD']['DIAL_SCALE']),1.3)
         self.assertEqual(h.ini['HUD']['UNITS'],'MPH')
         self.assertEqual(h.ini['HUD']['THEME'],'AMBER')
-        h.lua.execute("ui.slider=function(_,v) return v end;ui.button=function(label) return label=='Reset to defaults' end")
+        h.lua.execute("controlTab='HUD';ui.slider=function(_,v) return v end;ui.button=function(label) return controlID=='layout' and label=='Reset to defaults' end")
         h.lua.globals().script.windowMain()
-        self.assertEqual(h.saves,1) # Reset is a preview until Save
+        self.assertEqual(h.saves,1) # Opening confirmation does not save
+        h.lua.execute("ui.button=function(label) return controlID=='layout' and label=='Confirm reset' end;script.windowMain();controlTab='General'")
         h.lua.execute("ui.button=function(label) return label=='Save config.ini' end")
         h.lua.globals().script.windowMain()
         self.assertEqual(float(h.ini['HUD']['SCALE']),1)
-        self.assertEqual(h.ini['HUD']['UNITS'],'KMH')
+        self.assertEqual(h.ini['HUD']['UNITS'],'MPH')
+        self.assertAlmostEqual(float(h.ini['HUD']['DIAL_SCALE']),1.3)
     def test_region_scale_extremes_fit_and_offsets(self):
         for curve in (0,1.6):
             for scales in itertools.product((0.5,1.5),repeat=4):

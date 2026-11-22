@@ -69,7 +69,7 @@ class AeroAnimationTests(unittest.TestCase):
           ac.getSim=function() return {carsCount=1,currentSessionIndex=0} end
         ''')
         h.frame(1/60)
-        h.lua.execute("ui.slider=function(label,v) return label=='HUD scale' and 0.7 or v end")
+        h.lua.execute("ui.slider=function(label,v) return label=='##hudScale' and 70 or v end")
         h.lua.globals().script.windowMain();h.frame(1/60)
         self.assertTrue(0<phases[0]<phases[1]<1)
 

@@ -1,10 +1,19 @@
 -- One schema for defaults, compatibility reads, range clamps and saving.
 local M={}
 M.schema={
+  drsEnabled={'DRS_CHIME_ENABLED',false}, drsTriggerMode={'DRS_TRIGGER_MODE','AUTO'}, drsVolume={'DRS_CHIME_VOLUME',0.65,0,1},
+  drsCooldown={'DRS_COOLDOWN_SECONDS',1.5,1.5,10},
+  drsMargin={'DRS_ACTIVATION_MARGIN_M',40,0,200},
+  drsFreeSeconds={'DRS_FREE_USE_SECONDS',2,0.5,10},
+  drsForceOn={'DRS_FORCE_ON',''}, drsForceOff={'DRS_FORCE_OFF',''},
+  debugMode={'DEBUG_MODE',false}, lockHUD={'LOCK_HUD_POSITION',false},
+  debugDRS={'DEBUG_DRS',false}, debugDRSActive={'DEBUG_DRS_ACTIVE_CHIME',false},
+  drsSound={'DRS_SOUND','drs_chime.wav',preserveCase=true},
   enabled={'ENABLED',true}, scale={'SCALE',1,0.5,1.5}, x={'X_OFFSET',0,-960,960},
   y={'Y_OFFSET',0,-540,540}, curve={'CURVE',1,0,1.6}, opacity={'OPACITY',0.95,0,1},
   leftScale={'LEFT_SCALE',1,0.5,1.5}, dialScale={'DIAL_SCALE',1,0.5,1.5},
   moduleScale={'MODULE_SCALE',1,0.5,1.5}, rightScale={'RIGHT_SCALE',1,0.5,1.5},
+  showLeft={'SHOW_LEFT_ZONE',true}, showCenter={'SHOW_CENTER_ZONE',true}, showRight={'SHOW_RIGHT_ZONE',true},
   outerArc={'OUTER_ARC',false}, aeroDuration={'AERO_ANIMATION_MS',420,150,1000},
   leaderboardDuration={'LEADERBOARD_ANIMATION_MS',450,200,900},
   gearDuration={'GEAR_ANIMATION_MS',260,150,600},
@@ -32,8 +41,27 @@ local function clean(v,d)
     if type(v)~='number' or v~=v or math.abs(v)==math.huge then v=d[2] end
     return math.max(d[3],math.min(d[4],v))
   end
-  return type(v)=='string' and v:upper() or v
+  return type(v)=='string' and not d.preserveCase and v:upper() or v
 end
+-- The old release kept dragMode in memory only. Honor an explicit legacy
+-- config key if an older or customized install did write one.
+local function legacyLock(ini)
+  if not ini or ini:get('HUD','LOCK_HUD_POSITION','')~='' then return nil end
+  for _,key in ipairs({'DRAG_HUD_WITH_MOUSE','DRAG_MODE'}) do
+    local raw=ini:get('HUD',key,''):match('^%s*(.-)%s*$'):upper()
+    if raw=='0' or raw=='FALSE' or raw=='OFF' or raw=='NO' then return true end
+    if raw=='1' or raw=='TRUE' or raw=='ON' or raw=='YES' then return false end
+  end
+end
+
+function M.diagnostics(c,result)
+  local debug=c.debugMode
+  result.drsLog=debug and c.debugDRS
+  result.activeCue=result.drsLog and c.debugDRSActive
+  result.forceDemo=debug and c.demo=='ON'
+  result.profile=debug and c.profileCPU
+end
+
 function M.read(ini)
   local c={}
   for k,d in pairs(M.schema) do
@@ -41,6 +69,9 @@ function M.read(ini)
     if ini then v=ini:get('HUD',d[1],d[2]) end
     c[k]=clean(v,d)
   end
+  local migratedLock=legacyLock(ini)
+  if migratedLock~=nil then c.lockHUD=migratedLock end
+  if c.drsTriggerMode~='SPLINE' then c.drsTriggerMode='AUTO' end
   c.strips=math.floor(c.strips)
   c.p2pActiveStatus=math.floor(c.p2pActiveStatus)
   c.carProfile={}
@@ -50,7 +81,7 @@ function M.read(ini)
     -- Metadata/path casing is significant: do not uppercase profile strings.
     c.carProfile[k]=type(d[2])=='string' and v or clean(v,d)
   end
-  return c
+  return c,migratedLock~=nil
 end
 function M.effective(c,id,car)
   local e={}; for k,v in pairs(c) do e[k]=v end

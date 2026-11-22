@@ -189,15 +189,16 @@ No fresh engine-performance or live-car acceptance claim is made; existing camer
 Earlier CLEAR TRACK race behavior and battery-outline descriptions are historical and superseded by this release. Practice/qualifying continue using the existing leaderboard behavior.
 
 
-## Mouse positioning (1.7)
+## Mouse positioning
 
-- [x] 52 offline Lua 5.1 tests pass, including mouse movement at 1280x720, 1920x1080 and 2560x1440, scale conversion, edge clamps/reversal, first-click stability, save debounce, temporary mode, Reset and global hiding.
-- [x] New mouse APIs checked against generated CSP 0.2.0 build 2651 SDK declarations. Fullscreen window still rejects input; only the small edit handle accepts it.
-- [ ] In AC, enable **Drag HUD with mouse**, close controls, left-drag the handle, release and wait 0.4 seconds. Reopen controls: offsets match. Reload/restart: position is retained.
-- [ ] Move to all edges at different resolutions/UI scales and overall/region scales. No jump on initial click, clipping, or dead zone when reversing direction. Confirm mouse movement does not move the driving camera while holding the handle.
-- [ ] Turn edit mode off: no handle/input capture. Ctrl+H hides HUD and handle; showing it does not resume a stale drag. Reset ends edit mode. Startup begins with edit mode off.
+- [ ] In the driving view, reveal the cursor at the app sidebar. With **General → Lock HUD position** off and controls closed, drag from the leaderboard, dial and right powertrain panel. Expect a move cursor and no jump on the initial press.
+- [ ] Press outside the HUD and move onto it while still holding. Then overlap a CSP or Python app with the HUD and click that app. The HUD should stay put and the other app should get the click.
+- [ ] During a drag, confirm that mouse movement neither moves the camera nor clicks another app, including if you release over it. Repeat at a different overall and panel scale, curvature, and CSP UI scale. Try all four screen edges.
+- [ ] Hold the drag for more than 0.4 seconds, then release. Check that config.ini gets the final position after release and that offsets persist after restarting the session.
+- [ ] Double-click an unlocked HUD. Both offsets should return to 0 px. Turn on **Lock HUD position** and verify that neither drag nor double-click moves it. Restart and verify the lock persists.
+- [ ] Use Ctrl+H mid-drag. The HUD should hide, keep the last position, and require a new press when shown again.
 
-Mouse tests use an input mock, so actual CSP mouse capture, UI scaling and click routing remain in-game checks.
+Offline tests verify projected bounds, scale conversion, clamping, debounced saves, overlap checks, double-click and migration against mocked input. Cursor availability, camera input, window routing and DPI still need these in-game checks.
 
 
 ## Curved gauges and battery contrast (1.8.0)
@@ -224,3 +225,56 @@ Offline regression coverage includes swap/reversal continuity, solo fade with ca
 ## Leaderboard trigger regression (1.10.1)
 
 Check a rank gain/loss that does not involve P1: player and comparison rows now visibly settle vertically despite retaining their final row slots. A comparison-driver change at unchanged rank animates its reveal. Repeated identical telemetry must stay still. Force demo runs following → improved rank → P1 → solo at six-second intervals in a 24-second loop. Existing P1 full swaps, resize continuity and solo fades must still pass. Native validation and frame-time checks remain pending.
+
+
+## DRS chime manual test plan
+
+Turn on **General → Debug Mode** and **Advanced → Diagnostics → DRS debug logging**. Use your own short WAV in `apps/lua/HaloHUD/sounds/drs_chime.wav`. In addition to listening, check the classification, in-zone status and last suppression in HaloHUD controls and the DRS transition logs.
+
+| Scenario | Expected behavior |
+|---|---|
+| Sound present, eligible car, two or more zones | Hear one cue when availability rises in each eligible zone, before pressing DRS. Toggling DRS or flicker within the same zone does not produce another cue. |
+| Zone wraps the starting line | The zone stays active across the line. Hear only one cue for that entry. Imola’s installed zone data is one example. |
+| Early laps with DRS disabled | No cue while availability stays false. On tracks/sessions where a rule set applies, compare an early with a later eligible lap. |
+| Gap denied, then granted | With the applicable race rules enabled, no cue on denied entry. Hear a cue when the game grants DRS on a later entry. |
+| Free-use aero car | Verify sustained availability outside zones. For pits or stationary evidence, check that the seed frame is ignored and the dwell starts after five seconds. Stationary evidence also requires prior on-track movement. The car stays classified free-use for that session and remains quiet. |
+| Car without DRS | Remains quiet and shows `no_drs` when live physics exposes that status. |
+| Restart, start inside zone, pit reset, pause or spectate | No cue on the first frame or from the state change. Return to the player and verify the next normal eligible entry. |
+| Replay seek | Enter replay, scrub across a zone, then return to live driving. No replay cue or stale edge on return. |
+| No readable `drs_zones.ini` | Log edge-only mode once. A clean moving false-to-true edge can play. Verify continuously available and pit/stationary free-use cases stay quiet. |
+| Missing or unreadable WAV | Select a missing or invalid file and reload. See a single file warning and debug error while normal HUD rendering continues. |
+| Choose a different WAV | Place two WAVs in `sounds/`, reload, and select the second file. Verify it is heard at the next eligible edge and the choice persists after reopening. |
+| Camera, volume and retrigger | Try cockpit and exterior cameras, adjust HaloHUD and AC Master volume separately, and verify the behavior with your build. Each trigger starts a fresh one-shot. Click **Test chime** at least 10 times, including rapid clicks, and confirm that each one starts without a load error. |
+
+Run `lua tests/test_drs_zone_math.lua` from the project root for the standalone wraparound and boundary tests. The Python suite also runs this script in a Lua 5.1 runtime with no CSP dependency. Mocked integration tests verify eligibility, repeat suppression, classification, file loading and selection. Native audio timing, codec support and mixer behavior require an in-game check.
+
+
+### Diagnose a silent DRS chime
+
+Enable **General → Debug Mode** and **Advanced → Diagnostics → DRS debug logging**. Use **Reload config.ini** to capture file metadata, then press **Test chime** in **DRS Chime**. The test plays the selected file independently of the cue toggle, car, zones, or replay. If the volume is zero, the test uses 0.65 and logs that choice. Ordinary gameplay keeps the saved volume.
+
+Look for `[HaloHUD DRS]` lines in the CSP log. The test records the effective settings, resolved path, existence, byte count, fresh audio-event options and validity, volume readback, `start()` return, and `isPlaying()` immediately after `start()`. File checks run at load or on a file selection change, and the header is logged once per file and format. `start()` returns the event object; a successful call does not prove the sound reached the speakers. A real eligible trigger logs `chime fired | playback=… | fresh valid=… | start succeeded=…`. If the test is audible but an eligible entry is silent, share the availability and suppression lines around that entry. If the test itself is silent, share the playback lines.
+
+
+### Diagnose the live DRS trigger
+
+With **Debug Mode** and **DRS debug logging** on, drive a full lap with **Test cue when DRS opens** off. The once-per-second `state` line includes the raw DRS flags, spline, track INI zone number, classification, remaining cooldown, replay/pause state and last suppression. Availability and activation transitions also appear immediately, along with zone crossings, classification changes, rejected cue attempts and jump resets. A jump reset shows both signed deltas and the threshold. The lap boundary uses the wrapped delta.
+
+Then enable **Test cue when DRS opens** and activate DRS. This diagnostic substitutes the actual activation edge for the normal cue while debug logging is on. It bypasses zone and classification checks. **DRS chime** must be enabled and the normal live player, replay, pause and reset checks still apply. Turn the diagnostic off to resume normal availability cues. If the game already reports `drsAvailable=true` on the first sample, there is no availability transition to cue until it falls and rises again.
+
+
+For a spline-mode check at Las Vegas, select **Zone entry (spline)** and cross a `START` moving forward. Repeat in **DRS availability (auto)** with `f1_2020_mercedes` and debug logging enabled. Confirm leaving and entering `ZONE_1` changes availability without a false free-use classification caused by stopping inside the zone. With the car in `DRS_FORCE_ON` and the selector set to auto, expect the same spline behavior. For volume, compare `AudioEvent gain` and any `gain restore/readback` line across identical button presses from the same camera. Audible loudness still needs an in-game comparison.
+
+
+## Controls window checklist
+
+1. Open **General**. Locate **Lock HUD position** and **Debug Mode** at the bottom. Toggle Show HUD, save, edit a value in config.ini, and reload. Cancel a visibility reset, then confirm it.
+2. Open **HUD**. Try the overall scale, both offsets, curvature, panel scales, outer arc, units, name format, theme, opacity and animation timings. Toggle each zone under **Elements**. Check that the other zones stay in place, the hidden area no longer starts a drag, and the zone choices persist after restart. Confirm hiding all three leaves only the outer arc if it is enabled. Reset Elements and check that all three zones return.
+3. Turn **Debug Mode** off. In **DRS Chime**, verify enable, volume and Test chime, sound file, trigger mode and Reset section. Check a ready sound and then a missing sound. The missing sound should produce one plain warning. **Advanced** should show only DRS tuning. No tab should show raw telemetry, technical status, overrides or diagnostic toggles.
+4. Turn **Debug Mode** on. In **DRS Chime**, check the live status and the override editor. Add and remove the current car and a typed folder ID. Put a car in both lists and confirm force-off wins. In **Advanced**, open Diagnostics and Live telemetry. Exercise demo, CPU timing, logging and the activation-edge diagnostic.
+5. Leave the diagnostics enabled and turn **Debug Mode** off. Confirm live driving replaces forced demo, periodic and transition diagnostics stop, and pressing the DRS button alone no longer cues. Verify a force-on car still cues on a forward zone crossing with the normal chime enabled. Re-enable Debug Mode and confirm the diagnostic switches come back with their saved values.
+6. Cancel and then confirm a section reset. Verify Debug Mode and Lock HUD position stay as set. A sound reset must preserve both override lists. Confirm clearing both lists only through the explicit override reset.
+7. Resize to the minimum and try a larger CSP UI scale or Windows DPI setting. Check tab access, scrolling, tooltips, the volume/Test chime row and the debug status block. Follow the [mouse positioning checks](#mouse-positioning) at both UI scales.
+8. Close controls and drive through an eligible zone. Confirm the HUD and chime continue to update. Restart and verify the layout, lock, Debug Mode, diagnostic preferences, sound, trigger mode and overrides persist.
+
+Offline mocks cover state transitions, persistence and widget routing. Native tab sizing, tooltips, theme contrast, DPI and audio still require an in-game session.

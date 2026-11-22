@@ -15,16 +15,25 @@ def main():
     # INIConfig.load is nested, include explicitly rather than matching its prefix.
     calls.discard('ac.INIConfig')
     if 'ac.INIConfig.load(' in runtime: calls.add('ac.INIConfig.load')
+    for name in ('ac.AudioEvent.fromFile','ac.onSessionStart','ac.getTrackDataFilename','ac.getFolder',
+                 'ac.getTrackID','ac.log','io.load','io.fileExists','io.fileSize','io.scanDir'):
+        if name in runtime: calls.add(name)
     missing=[x for x in calls if not re.search(r'function\s+'+re.escape(x)+r'\s*\(',sdk)]
     assert not missing, 'Missing SDK calls: '+str(missing)
     for field in sorted(set(re.findall(r'\bcar\.([A-Za-z_]\w*)',runtime))):
         assert re.search(r'---@field '+re.escape(field)+r'\b',sdk),'Missing car field '+field
     for field in ('carsCount','currentSessionIndex','leaderboard','car','windowSize',
                   'raceSessionType','racePosition','isConnected','isActive',
-                  'appsHidden','uiHidden'):
+                  'appsHidden','uiHidden','wantCaptureMouse','isReplayOnlyMode','isReplayActive','isPaused',
+                  'focusedCar','trackLengthM','isSessionStarted','isInMainMenu','cameraInteriorMultiplier','cameraExteriorMultiplier',
+                  'cameraTrackMultiplier','volume'):
         assert re.search(r'---@field '+field+r'\b',sdk),'Missing state field '+field
+    for enum in ('ui.HoveredFlags.AnyWindow','ui.MouseCursor.ResizeAll'):
+        assert enum in sdk,'Missing UI enum '+enum
     for method in ('driverName','get','set','save'):
         assert re.search(r'function [\w_]+:'+method+r'\(',sdk),'Missing method '+method
+    for method in ('isValid','isPlaying','stop','start','dispose'):
+        assert re.search(r'function _ac_AudioEvent:'+method+r'\(',sdk),'Missing audio method '+method
     print('Verified calls: '+', '.join(sorted(calls)))
     print('Verified car fields and state/INI methods')
     print('SDK SHA256: '+hashlib.sha256(p.read_bytes()).hexdigest())

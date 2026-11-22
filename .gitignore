@@ -27,3 +27,7 @@ Desktop.ini
 
 # Temporary CI packaging tools
 .release-tools/
+
+# User-supplied DRS sounds
+apps/lua/HaloHUD/sounds/*
+!apps/lua/HaloHUD/sounds/README.txt

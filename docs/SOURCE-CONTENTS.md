@@ -51,12 +51,28 @@ return M
 ; All offsets are 1920x1080 design pixels. Sliders and mouse dragging apply instantly and auto-save.
 [HUD]
 ; All in-game controls auto-save after 0.4 seconds idle; Save writes immediately.
+; Debug Mode gates diagnostics without clearing their saved settings.
+DEBUG_MODE = 0
 PROFILE_CPU = 0
+; Place your own WAV in apps/lua/HaloHUD/sounds/. Reload config after adding files.
+DRS_CHIME_ENABLED = 0
+DRS_TRIGGER_MODE = AUTO
+DRS_CHIME_VOLUME = 0.65
+DRS_SOUND = drs_chime.wav
+DRS_COOLDOWN_SECONDS = 1.5
+DRS_ACTIVATION_MARGIN_M = 40
+DRS_FREE_USE_SECONDS = 2
+; Comma- or space-separated car folder IDs. Force-off wins conflicts.
+DRS_FORCE_ON =
+DRS_FORCE_OFF =
+DEBUG_DRS = 0
+DEBUG_DRS_ACTIVE_CHIME = 0
 AERO_ANIMATION_MS = 420
 ; N/R pulse takes twice this duration, with 30% enlargement.
 GEAR_ANIMATION_MS = 260
 LEADERBOARD_ANIMATION_MS = 450
 ENABLED = 1
+LOCK_HUD_POSITION = 0
 SCALE = 1.0
 X_OFFSET = 0
 Y_OFFSET = 0
@@ -69,7 +85,7 @@ UNITS = KMH
 DRIVER_NAMES = FULL
 ; TEAL, ICE or AMBER; navy glass remains navy.
 THEME = TEAL
-; AUTO = real telemetry when a car exists, ON = synthetic, OFF = hide if no car.
+; AUTO = live when possible, ON = force synthetic with Debug Mode, OFF = hide if no car.
 DEMO = AUTO
 ; HUD remains visible independently of the controls window.
 ; Pedals only: exponential time constant in milliseconds. Speed/RPM are unsmoothed.
@@ -84,6 +100,9 @@ LEFT_SCALE = 1.0
 DIAL_SCALE = 1.0
 MODULE_SCALE = 1.0
 RIGHT_SCALE = 1.0
+SHOW_LEFT_ZONE = 1
+SHOW_CENTER_ZONE = 1
+SHOW_RIGHT_ZONE = 1
 OUTER_ARC = 0
 ; Charge fraction per second: 0.10 = ten percentage points per second.
 RECOVERY_MAX_RATE = 0.10
@@ -123,6 +142,1073 @@ REV_LIMIT_RPM = -1
 GEARS = -1
 RECOVERY_MAX_RATE = -1
 BATTERY_CAPACITY_KJ = -1
+
+````
+
+## apps/lua/HaloHUD/controls.lua
+
+````lua
+local Model=require('controls_model')
+local Settings=require('settings')
+local M={}
+
+local function tooltip(text)
+  if ui.itemHovered() then ui.setTooltip(text) end
+end
+
+local function header(text)
+  ui.dummy(vec2(0,6))
+  ui.header(text)
+  ui.separator()
+end
+
+local function width(maximum)
+  return math.max(1,math.min(maximum or 330,ui.availableSpaceX()))
+end
+
+local function toggle(view,key,label,help,value)
+  if value==nil then value=view.cfg[key] end
+  if ui.checkbox(label,value) then view.set(key,not value) end
+  tooltip(help)
+end
+
+local function slider(view,key,id,label,help,format,factor,maxWidth)
+  local schema=Settings.schema[key]
+  factor=factor or 1
+  ui.textWrapped(label)
+  tooltip(help)
+  ui.setNextItemWidth(width(maxWidth))
+  local current=view.cfg[key]*factor
+  local input=ui.slider(id,current,schema[3]*factor,schema[4]*factor,format)
+  tooltip(help)
+  if input~=current then
+    view.set(key,math.max(schema[3],math.min(schema[4],input/factor)))
+  end
+end
+
+local function choice(value,label) return {value=value,label=label} end
+local speedChoices={choice('KMH','Kilometres per hour'),choice('MPH','Miles per hour')}
+local nameChoices={choice('FULL','Surname'),choice('CODE','Three-letter code')}
+local themeChoices={choice('TEAL','Teal'),choice('ICE','Ice blue'),choice('AMBER','Amber')}
+local modeChoices={choice('AUTO','When the game enables DRS (auto)'),choice('SPLINE','When I cross a zone line')}
+local modeHelp='Auto waits for the game to enable DRS. Zone entry cues at a track activation line even if the game denies DRS. Default: Auto. Force-on uses zone entry for that car, skipping the availability edge and free-use classification. Force-off wins.'
+
+local function combo(view,key,id,label,help,items)
+  local value=view.cfg[key]
+  local preview=items[1].label
+  for _,item in ipairs(items) do if item.value==value then preview=item.label;break end end
+  ui.textWrapped(label)
+  tooltip(help)
+  ui.setNextItemWidth(width())
+  view.choiceKey,view.choices=key,items
+  ui.combo(id,preview,0,view.drawChoices)
+  tooltip(help)
+end
+
+local resetLabels={
+  visibility='Reset visibility?', layout='Reset HUD layout?', panels='Reset panel scales?', elements='Reset HUD elements?',
+  appearance='Reset units and colors?', animations='Reset animations?', sound='Reset chime settings?',
+  overrides='Clear both car override lists?', tuning='Reset DRS tuning?', diagnostics='Reset diagnostics?'
+}
+local function reset(view,section)
+  ui.pushID(section)
+  if view.pendingReset==section then
+    ui.textWrapped(resetLabels[section])
+    if ui.button('Confirm reset') then
+      Model.reset(section,Settings.schema,view.set)
+      view.pendingReset=nil
+    end
+    ui.sameLine()
+    if ui.button('Cancel') then view.pendingReset=nil end
+  elseif ui.button(section=='sound' and 'Reset section' or 'Reset to defaults') then
+    view.pendingReset=section
+  end
+  ui.popID()
+end
+
+local function general(view)
+  header('Visibility')
+  toggle(view,'enabled','Show HUD','Shows the HaloHUD overlay while driving. Default: On.')
+  reset(view,'visibility')
+  header('Settings file')
+  if ui.button('Save config.ini') then view.save() end
+  tooltip('Writes the current settings to config.ini immediately.')
+  ui.sameLine()
+  if ui.button('Reload config.ini') then
+    view.pendingReset=nil
+    view.reload()
+  end
+  tooltip('Reads config.ini from disk and scans the sounds folder again. Unsaved edits are discarded.')
+
+  header('HUD interaction')
+  toggle(view,'lockHUD','Lock HUD position','Prevents mouse dragging and double-click reset. When unlocked, drag the HUD or double-click it to reset the offsets. Default: Off.')
+  toggle(view,'debugMode','Debug Mode','Shows diagnostic tools and technical status.')
+end
+
+local function hud(view)
+  header('Layout')
+  slider(view,'scale','##hudScale','HUD scale','Sets the overall HUD size. Default: 100%.','%.0f%%',100)
+  slider(view,'x','##offsetX','Horizontal offset','Moves the HUD left or right in design pixels. Default: 0 px.','%.0f px')
+  slider(view,'y','##offsetY','Vertical offset','Moves the HUD up or down in design pixels. Default: 0 px.','%.0f px')
+  slider(view,'curve','##curvature','Halo curvature','Sets how strongly the HUD follows a curve. 0 is flat. Default: 1.00.','%.2f')
+  reset(view,'layout')
+  header('Panel scales')
+  slider(view,'leftScale','##leftScale','Left timing panel scale','Resizes the leaderboard independently. Default: 100%.','%.0f%%',100)
+  slider(view,'dialScale','##dialScale','Center speedometer scale','Resizes the circular dial independently. Default: 100%.','%.0f%%',100)
+  slider(view,'moduleScale','##moduleScale','Pedal and energy module scale','Resizes the brake, throttle, recharge and deploy gauges. Default: 100%.','%.0f%%',100)
+  slider(view,'rightScale','##rightScale','Right powertrain scale','Resizes the gear, RPM and active aero panel. Default: 100%.','%.0f%%',100)
+  reset(view,'panels')
+  header('Elements')
+  toggle(view,'showLeft','Left zone · Leaderboard','Shows your position and the comparison driver. Default: On.')
+  toggle(view,'showCenter','Center zone · Speedometer and gauges','Shows speed, brake, throttle, recharge, deploy and battery. Default: On.')
+  toggle(view,'showRight','Right zone · Aero, gears and RPM','Shows active aero, gear selection and the RPM bar. Default: On.')
+  toggle(view,'outerArc','Show outer arc','Adds a thin curve above the HUD. Default: Off.')
+  reset(view,'elements')
+  header('Units and colors')
+  combo(view,'units','##speedUnits','Primary speed unit','Sets the main speed reading. Both units remain visible. Default: Kilometres per hour.',speedChoices)
+  combo(view,'names','##driverNames','Driver name format','Sets how names appear in the leaderboard. Default: Surname.',nameChoices)
+  combo(view,'theme','##theme','HUD color theme','Changes the HUD accent colors. Default: Teal.',themeChoices)
+  slider(view,'opacity','##opacity','HUD opacity','Sets how opaque the HUD appears. Default: 95%.','%.0f%%',100)
+  reset(view,'appearance')
+  header('Animations')
+  slider(view,'leaderboardDuration','##leaderboardDuration','Leaderboard animation','Sets how long the timing rows take to slide. Default: 0.45 s.','%.2f s',0.001)
+  slider(view,'gearDuration','##gearDuration','Gear animation','Sets the gear highlight slide time. The N/R pulse lasts twice as long. Default: 0.26 s.','%.2f s',0.001)
+  slider(view,'aeroDuration','##aeroDuration','Active aero animation','Sets how long the aero indicator takes to transition. Default: 0.42 s.','%.2f s',0.001)
+  reset(view,'animations')
+end
+
+local toneColors={
+  good={rgbm(.46,.94,.66,1),rgbm(.05,.31,.15,1)},
+  warn={rgbm(1,.82,.44,1),rgbm(.39,.22,.02,1)},
+  bad={rgbm(1,.65,.65,1),rgbm(.56,.10,.13,1)}
+}
+local function linear(channel)
+  return channel<=.04045 and channel/12.92 or ((channel+.055)/1.055)^2.4
+end
+local function luminance(color)
+  return .2126*linear(color.r)+.7152*linear(color.g)+.0722*linear(color.b)
+end
+local function statusColor(tone,background)
+  if not background then return nil end
+  local light=luminance(background)
+  local choices=toneColors[tone]
+  for _,candidate in ipairs(choices) do
+    local other=luminance(candidate)
+    if (math.max(light,other)+.05)/(math.min(light,other)+.05)>=4.5 then return candidate end
+  end
+end
+local function statusLine(text,tone,background)
+  local color=statusColor(tone,background)
+  if color then ui.pushStyleColor(ui.StyleColor.Text,color) end
+  ui.textWrapped(text)
+  if color then ui.popStyleColor() end
+end
+
+local function syncLists(view)
+  if view.onText==view.cfg.drsForceOn and view.offText==view.cfg.drsForceOff then return end
+  view.onText,view.offText=view.cfg.drsForceOn,view.cfg.drsForceOff
+  view.onItems,view.onLookup=Model.parseList(view.onText)
+  view.offItems,view.offLookup=Model.parseList(view.offText)
+  view.conflict=false
+  for _,item in ipairs(view.onItems) do
+    if view.offLookup[item.id] then view.conflict=true;break end
+  end
+end
+
+local function editOverride(view,key,name,remove)
+  local updated,errorText=Model.editList(view.cfg[key],name,remove)
+  view.listError=errorText
+  if updated then view.set(key,updated) end
+end
+
+local function drawList(view,key,title,items,opposite,addCurrent)
+  ui.pushID(key)
+  ui.text(title)
+  if #items==0 then ui.textDisabled('No car overrides') end
+  for _,item in ipairs(items) do
+    ui.pushID(item.id)
+    if ui.button('Remove') then editOverride(view,key,item.name,true) end
+    ui.sameLine()
+    ui.textWrapped(item.name)
+    if opposite[item.id] then tooltip('This car is in both lists. Force-off wins.') end
+    ui.popID()
+  end
+  if view.drsCar~='' then
+    if ui.button(addCurrent) then editOverride(view,key,view.drsCar,false) end
+  end
+  ui.popID()
+end
+
+local function drsSettings(view)
+  local background=ui.styleColor(ui.StyleColor.WindowBg)
+  header('Chime settings')
+  toggle(view,'drsEnabled','Enable DRS chime','Plays the selected sound when the chosen DRS trigger fires. Default: Off.')
+  local buttonWidth=ui.measureText('Test chime').x+24
+  slider(view,'drsVolume','##chimeVolume','Chime volume','Sets the cue volume from 0 to 100%. Default: 65%.','%.0f%%',100,ui.availableSpaceX()-buttonWidth-8)
+  ui.sameLine()
+  if ui.button('Test chime') then view.testChime() end
+  tooltip('Plays the selected file now. At zero volume, this test uses 65%.')
+  ui.textWrapped('Sound file')
+  tooltip('Lists WAV files from HaloHUD/sounds/. Reload config.ini to scan again. Default: drs_chime.wav.')
+  ui.setNextItemWidth(width())
+  ui.combo('##drsSound',view.cfg.drsSound,0,view.drawSounds)
+  tooltip('Select a WAV from the sounds folder. Default: drs_chime.wav.')
+  if not view.cfg.debugMode then
+    local warning=Model.soundWarning(view.drsStatus,view.drsSoundStatus,view.cfg.drsSound)
+    if warning then statusLine(warning,'warn',background) end
+  end
+  combo(view,'drsTriggerMode','##triggerMode','Trigger mode',modeHelp,modeChoices)
+  reset(view,'sound')
+  if not view.cfg.debugMode then return end
+
+  header('Car overrides')
+  ui.textWrapped('Force-on uses the zone line. Force-off silences the car and wins conflicts.')
+  if view.conflict then statusLine('Conflict: at least one car is in both lists. Force-off wins.','warn',background) end
+  drawList(view,'drsForceOn','Force-on cars',view.onItems,view.offLookup,'Add current car to force-on')
+  drawList(view,'drsForceOff','Force-off cars',view.offItems,view.onLookup,'Add current car to force-off')
+  ui.textWrapped('Add by car folder ID')
+  ui.setNextItemWidth(width())
+  view.carInput=ui.inputText('##carFolderID',view.carInput)
+  tooltip('Enter a folder name from content/cars to edit a car other than the one you are driving.')
+  if ui.button('Add to force-on') then editOverride(view,'drsForceOn',view.carInput,false) end
+  ui.sameLine()
+  if ui.button('Add to force-off') then editOverride(view,'drsForceOff',view.carInput,false) end
+  if view.listError then statusLine(view.listError,'warn',background) end
+  reset(view,'overrides')
+end
+
+local function drsStatus(view)
+  syncLists(view)
+  local on=view.onLookup[view.drsKey] or false
+  local off=view.offLookup[view.drsKey] or false
+  local mode=view.cfg.debugDRS and view.cfg.debugDRSActive and 'DIAGNOSTIC'
+    or on and not off and 'SPLINE' or view.cfg.drsTriggerMode
+  local status=Model.status(view.drsStatus,view.drsSoundStatus,view.drsFile,view.zoneCount,view.drsCar,
+    view.drsClassification,on,off,mode,view.drsReason)
+  local background=ui.styleColor(ui.StyleColor.WindowBg)
+  header('Live status')
+  statusLine(status.soundText,status.soundTone,background)
+  statusLine(status.trackText,status.trackTone,background)
+  ui.textWrapped(status.carText)
+  statusLine(status.modeText,status.modeTone,background)
+  ui.textWrapped(status.triggerText)
+  ui.textWrapped(status.skipped)
+end
+
+local function drsTab(view)
+  view.readDRS(view)
+  if view.cfg.debugMode then drsStatus(view) end
+  ui.childWindow('DRS chime options',vec2(0,0),false,0,view.drsSettingsBody)
+end
+
+local function tuning(view)
+  slider(view,'drsCooldown','##cooldown','Minimum time between chimes','Prevents repeated cues close together. Default: 1.5 s.','%.2f s')
+  slider(view,'drsMargin','##margin','Activation-line tolerance','Allows for telemetry timing near the zone boundary. Default: 40 m.','%.0f m')
+  slider(view,'drsFreeSeconds','##freeUseSeconds','Free-use detection time','Sets how long availability outside the zones must persist before classification. Default: 2 s.','%.2f s')
+  reset(view,'tuning')
+end
+
+local function diagnostics(view)
+  if ui.checkbox('Force demo telemetry',view.cfg.demo=='ON') then view.set('demo',view.cfg.demo=='ON' and 'AUTO' or 'ON') end
+  tooltip('Shows synthetic data for testing. Default: Auto, using live data when available.')
+  toggle(view,'profileCPU','Measure Lua CPU time','Shows Lua update and draw submission times in Live telemetry. Default: Off.')
+  toggle(view,'debugDRS','DRS debug logging','Writes chime state, trigger and suppression details to the CSP log. Default: Off.')
+  if view.cfg.debugDRS then
+    toggle(view,'debugDRSActive','Test cue when DRS opens','Uses the DRS activation edge instead of the normal trigger while debugging. Default: Off.')
+  end
+  reset(view,'diagnostics')
+end
+
+local function advanced(view)
+  if view.cfg.debugMode then ui.treeNode('Diagnostics',0,view.diagnosticsBody) end
+  ui.treeNode('DRS tuning',0,view.tuningBody)
+  if view.cfg.debugMode then ui.treeNode('Live telemetry',0,view.telemetryBody) end
+end
+
+function M.new(view)
+  view.carInput=''
+  view.drsStatus={}
+  view.drawChoices=function()
+    for _,item in ipairs(view.choices) do
+      if ui.selectable(item.label,item.value==view.cfg[view.choiceKey]) then view.set(view.choiceKey,item.value) end
+    end
+  end
+  view.drawSounds=function()
+    if #view.drsFiles==0 then ui.textDisabled('No WAV files found') end
+    for _,name in ipairs(view.drsFiles) do
+      if ui.selectable(name,name==view.cfg.drsSound) then view.set('drsSound',name) end
+    end
+  end
+  view.general=function() general(view) end
+  view.hud=function() hud(view) end
+  view.drs=function() drsTab(view) end
+  view.drsSettingsBody=function() drsSettings(view) end
+  view.advanced=function() advanced(view) end
+  view.diagnosticsBody=function() diagnostics(view) end
+  view.tuningBody=function() tuning(view) end
+  view.telemetryBody=function() view.readTelemetry(view) end
+  view.drawTabs=function()
+    ui.tabItem('General',0,view.general)
+    ui.tabItem('HUD',0,view.hud)
+    ui.tabItem('DRS Chime',0,view.drs)
+    ui.tabItem('Advanced',0,view.advanced)
+  end
+  return view
+end
+
+function M.draw(view,cfg,errorText,statusText)
+  view.cfg=cfg
+  ui.textDisabled('Changes apply immediately and auto-save')
+  tooltip('Changes are saved to config.ini after 0.4 seconds without edits. Save writes immediately. Reload reads the file and discards pending edits.')
+  if errorText then
+    ui.textWrapped(cfg.debugMode and errorText or 'Could not read or save config.ini.')
+  elseif statusText then ui.textDisabled(statusText) end
+  ui.tabBar('HaloHUD controls',0,view.drawTabs)
+end
+
+return M
+
+````
+
+## apps/lua/HaloHUD/controls_model.lua
+
+````lua
+-- Presentation helpers. The runtime remains responsible for DRS eligibility.
+local M={}
+
+M.sections={
+  visibility={'enabled'},
+  layout={'scale','x','y','curve'},
+  panels={'leftScale','dialScale','moduleScale','rightScale'},
+  elements={'showLeft','showCenter','showRight','outerArc'},
+  appearance={'units','names','theme','opacity'},
+  animations={'leaderboardDuration','gearDuration','aeroDuration'},
+  sound={'drsEnabled','drsVolume','drsSound','drsTriggerMode'},
+  overrides={'drsForceOn','drsForceOff'},
+  tuning={'drsCooldown','drsMargin','drsFreeSeconds'},
+  diagnostics={'demo','profileCPU','debugDRS','debugDRSActive'}
+}
+
+function M.reset(section,schema,set)
+  for _,key in ipairs(M.sections[section]) do
+    set(key,schema[key][2])
+  end
+end
+
+function M.parseList(text)
+  local items,lookup={},{}
+  for name in text:gmatch('[^,%s;]+') do
+    local id=name:lower()
+    if not lookup[id] then
+      items[#items+1]={name=name,id=id}
+      lookup[id]=true
+    end
+  end
+  return items,lookup
+end
+
+function M.editList(text,input,remove)
+  local name=input:match('^%s*(.-)%s*$')
+  if name=='' or name:find('[%s,;]') then return nil,'Enter one car folder ID.' end
+  local id=name:lower()
+  local names,found={},false
+  -- Preserve the spelling and order of other entries, even when the saved list
+  -- predates this UI and contains repeated names or mixed separators.
+  for token in text:gmatch('[^,%s;]+') do
+    if token:lower()==id then
+      found=true
+      if not remove then return text end
+    else names[#names+1]=token end
+  end
+  if remove and not found then return text end
+  if not remove then names[#names+1]=name end
+  return table.concat(names,', ')
+end
+
+local reasons={
+  ['no DRS']='this car does not report DRS support.',
+  ['teleport']='the car jumped to a different position on the track.',
+  ['invalid spline position']='the game did not report a valid track position.',
+  ['pit lane']='the car was in or leaving the pit lane.',
+  ['started in zone']='you started inside a zone.',
+  ['initial sample']='HaloHUD was establishing the starting position.',
+  ['already available on first sample']='DRS was already available when HaloHUD started checking.',
+  ['no track zones for spline trigger']='this track has no readable zones for the selected trigger.',
+  ['override off']='this car is on the force-off list.',
+  ['already cued in zone']='the chime already played for this zone.',
+  ['cooldown']='the minimum time between chimes had not passed.',
+  ['DRS unavailable in zone']='the game had not enabled DRS in this zone.',
+  ['free-use car']='this car was classified as allowing DRS outside zones.',
+  ['outside activation zone']='the car was outside a DRS activation zone.',
+  ['speed below 5 km/h']='the car was moving slower than 5 km/h.',
+  ['DRS already active at availability edge']='DRS was already open when availability changed.',
+  ['chime disabled']='the chime is turned off.',
+  ['replay']='the game was in replay.',
+  ['paused']='the game was paused.',
+  ['spectating or AI control']='the player car was not under your control.',
+  ['player physics unavailable']='live physics data was unavailable for the player car.',
+  ['no live player telemetry']='no live player telemetry was available.',
+  ['normal cue disabled by active-edge diagnostic']='the DRS activation diagnostic replaced the normal cue.',
+  ['availability cue disabled by active-edge diagnostic']='the DRS activation diagnostic replaced the normal cue.',
+  ['no clean activation edge']='the game did not report a clean availability change.',
+  ['volume muted']='the chime volume was set to zero.',
+  ['Not loaded']='the sound had not loaded.',
+  ['WAV missing or unreadable']='the WAV file was missing or unreadable.',
+  ['Invalid WAV filename']='the selected filename was invalid.',
+  ['File audio API unavailable']='the CSP file audio interface was unavailable.',
+  ['WAV could not be loaded']='CSP could not load the WAV file.',
+  ['AudioEvent validation failed']='CSP could not validate the audio event.',
+  ['AudioEvent gain configuration failed']='CSP could not set the chime volume.',
+  ['AudioEvent:start failed']='CSP could not start playback.',
+  ['AudioEvent.volume assignment/readback failed']='CSP could not set the chime volume.',
+  ['AudioEvent camera configuration failed']='CSP could not set the camera audio levels.',
+  ['AudioEvent playback state or stop failed']='CSP could not prepare the sound for playback.',
+  ['Playback failed']='CSP could not play the sound.'
+}
+M.reasons=reasons
+function M.skipped(reason)
+  if not reason then return 'Last skipped chime: no reason recorded yet.' end
+  local text=reasons[reason]
+  if not text then
+    -- Playback errors append native details after a colon and space.
+    local prefix=reason:match('^(.-): ')
+    text=reasons[prefix] or 'the cue was skipped. See DRS debug logging for details.'
+  end
+  return 'Last skipped chime: '..text
+end
+
+-- An actionable warning is useful even with all diagnostic UI hidden.
+function M.soundWarning(cache,status,name)
+  if cache.warningStatus~=status or cache.warningName~=name then
+    cache.warningStatus,cache.warningName=status,name
+    if status=='Ready' then cache.warning=nil
+    elseif status=='WAV missing or unreadable' then
+      cache.warning='Sound file not found or unreadable. Put '..name..' in HaloHUD/sounds/ and reload settings.'
+    elseif status=='Not loaded' then
+      cache.warning='Reload settings after adding a WAV to HaloHUD/sounds/.'
+    else cache.warning='The selected sound could not play. Choose a readable WAV from the sounds folder.' end
+  end
+  return cache.warning
+end
+
+-- Rebuild display strings only when an input changes. Keep native errors in
+-- logs rather than showing long engine messages in the control window.
+function M.status(cache,sound,file,count,car,classification,on,off,mode,reason)
+  local rebuild=cache.sound~=sound or cache.file~=file or cache.count~=count or cache.car~=car
+    or cache.classification~=classification or cache.on~=on or cache.off~=off or cache.mode~=mode
+  if rebuild then
+    cache.sound,cache.file,cache.count,cache.car=sound,file,count,car
+    cache.classification,cache.on,cache.off,cache.mode=classification,on,off,mode
+    if sound=='Ready' and file then cache.soundText,cache.soundTone='Sound file: ready','good'
+    elseif sound=='WAV missing or unreadable' then cache.soundText,cache.soundTone='Sound file: missing or unreadable','bad'
+    elseif sound=='Not loaded' then cache.soundText,cache.soundTone='Sound file: not loaded yet','warn'
+    else cache.soundText,cache.soundTone='Sound file: playback unavailable','bad' end
+    if count==nil then cache.trackText,cache.trackTone='Track: no live track data','warn'
+    elseif count==0 then
+      if mode=='SPLINE' then cache.trackText='Track: no zones loaded. Spline cues need track zone data.'
+      elseif mode=='DIAGNOSTIC' then cache.trackText='Track: no zones loaded. The activation diagnostic can still play.'
+      else cache.trackText='Track: no zones loaded. Using game availability only.' end
+      cache.trackTone='warn'
+    else
+      cache.trackText='Track: '..count..(count==1 and ' DRS zone loaded' or ' DRS zones loaded')
+      cache.trackTone='good'
+    end
+    cache.triggerText=mode=='DIAGNOSTIC' and 'Current trigger: DRS activation diagnostic'
+      or mode=='SPLINE' and 'Current trigger: zone entry' or 'Current trigger: game availability (auto)'
+    cache.carText='Car ID: '..(car~='' and car or 'no player car')
+    if car=='' then cache.modeText,cache.modeTone='This car: no player car','warn'
+    elseif off then cache.modeText,cache.modeTone='This car: forced off','bad'
+    elseif on then cache.modeText,cache.modeTone='This car: forced on (zone entry)','good'
+    elseif classification=='free_use' then cache.modeText,cache.modeTone='This car: free-use DRS','warn'
+    elseif classification=='no_drs' then cache.modeText,cache.modeTone='This car: no DRS support','warn'
+    elseif classification=='zone_restricted' then cache.modeText,cache.modeTone='This car: follows DRS zones','good'
+    else cache.modeText,cache.modeTone='This car: not classified yet','warn' end
+  end
+  if reason~=cache.reason or not cache.skipped then
+    cache.skipped=M.skipped(reason)
+    cache.reason=reason
+  end
+  return cache
+end
+
+return M
+
+````
+
+## apps/lua/HaloHUD/drs_audio.lua
+
+````lua
+-- Cache file metadata on selection. Each cue gets its own 2D one-shot event.
+local M={}
+function M.new(folder)
+  return {folder=folder, files={}, status='Not loaded', warned={}}
+end
+
+local function warn(s,key,message)
+  if s.warned[key] then return end
+  s.warned[key]=true
+  if ac.log then pcall(ac.log,'[HaloHUD DRS] '..message) end
+end
+
+local function wavName(name)
+  return type(name)=='string' and name:lower():match('%.wav$') and not name:find('[/:\\]')
+end
+
+function M.scan(s)
+  s.files={}
+  if not io.scanDir then s.scanStatus='Sound folder scan API unavailable';return end
+  local ok,files=pcall(io.scanDir,s.folder,'*')
+  if not ok or type(files)~='table' then s.scanStatus='Sound folder missing or unreadable';return end
+  for _,name in ipairs(files) do
+    if wavName(name) then
+      local readable,exists=pcall(io.fileExists,s.folder..'/'..name)
+      if readable and exists then s.files[#s.files+1]=name end
+    end
+  end
+  table.sort(s.files)
+  s.scanStatus=#s.files==0 and 'No WAV files found' or nil
+end
+
+local function call(log,label,fn,...)
+  local ok,value=pcall(fn,...)
+  if log then log(label..' pcall='..tostring(ok)..(ok and ' returned=' or ' error=')..tostring(value)) end
+  return ok,value
+end
+
+local function absolutePath(folder,name,log)
+  local path=folder..'/'..name
+  if path:match('^%a:[/\\]') or path:match('^[/\\][/\\]') or path:sub(1,1)=='/' then return path end
+  if ac.getFolder and ac.FolderID then
+    local ok,root=call(log,'ac.getFolder(Root)',ac.getFolder,ac.FolderID.Root)
+    if ok and type(root)=='string' and root~='' then return root..'/'..path end
+  end
+  if log then log('Could not confirm absolute app path') end
+  return path
+end
+
+local function littleEndian(bytes,offset,count)
+  local value=0
+  for i=count-1,0,-1 do value=value*256+bytes:byte(offset+i) end
+  return value
+end
+
+function M.wavHeader(bytes)
+  if type(bytes)~='string' or bytes:sub(1,4)~='RIFF' or bytes:sub(9,12)~='WAVE' then
+    return 'No RIFF/WAVE header'
+  end
+  local offset=13
+  while offset+7<=#bytes do
+    local chunk=bytes:sub(offset,offset+3)
+    local size=littleEndian(bytes,offset+4,4)
+    local data=offset+8
+    if data+size-1>#bytes then return 'Truncated WAV chunk: '..chunk end
+    if chunk=='fmt ' and size>=16 then
+      local format=littleEndian(bytes,data,2)
+      local channels=littleEndian(bytes,data+2,2)
+      local rate=littleEndian(bytes,data+4,4)
+      local bits=littleEndian(bytes,data+14,2)
+      local extended=format==65534 and size>=40 and
+        ' subformat='..string.format('0x%04X',littleEndian(bytes,data+24,2)) or ''
+      return string.format('WAV header: format=0x%04X%s sampleRate=%d Hz bitDepth=%d channels=%d',
+        format,extended,rate,bits,channels)
+    end
+    offset=data+size+size%2
+  end
+  return 'WAV header: fmt chunk missing or too short'
+end
+
+local function inspectHeader(s,file,size,log)
+  if not io.load or type(size)~='number' or size<1 or size>4*1024*1024 then
+    if log then log('WAV header unavailable (size unknown, empty file, or file exceeds 4 MiB diagnostic limit)') end
+    return
+  end
+  local ok,bytes=pcall(io.load,file)
+  if not ok then
+    if log then log('WAV header read pcall=false error='..tostring(bytes)) end
+    return
+  end
+  if log then log('WAV header read pcall=true bytes='..tostring(type(bytes)=='string' and #bytes or nil)) end
+  local header=M.wavHeader(bytes)
+  local key=file..'|'..header
+  if log and not s.warned[key] then warn(s,key,header..' ('..file..')') end
+end
+
+-- CSP documents dispose() as both stopping and removing an event. Keep a
+-- strong reference until replacement or cleanup, even after the cue finishes.
+function M.dispose(s,log)
+  local event=s.event
+  s.event=nil
+  s.testing=false
+  if event then call(log,'AudioEvent:dispose',function() return event:dispose() end) end
+end
+
+function M.stop(s)
+  if not s.testing and s.event then M.dispose(s) end
+end
+
+function M.select(s,name,log,reportMissing)
+  M.dispose(s,log)
+  s.name=name
+  s.file=nil
+  if not wavName(name) then
+    s.status='Invalid WAV filename'
+  elseif not io.fileExists then
+    s.status='File audio API unavailable'
+  else
+    local file=absolutePath(s.folder,name,log)
+    if log then log('Resolved WAV path: '..file) end
+    local ok,exists=call(log,'io.fileExists',io.fileExists,file)
+    local size
+    if io.fileSize and (exists or log) then
+      local _,value=call(log,'io.fileSize (bytes)',io.fileSize,file)
+      size=value
+    elseif log then log('io.fileSize unavailable') end
+    if ok and exists then
+      inspectHeader(s,file,size,log)
+      s.file=file
+      s.status='Ready'
+      return true
+    end
+    s.status='WAV missing or unreadable'
+  end
+  if log then log(s.status) end
+  if reportMissing then warn(s,s.status..'|'..name,s.status..' ('..name..')') end
+  return false
+end
+
+local function playbackFailure(s,status,detail,log)
+  s.status=status
+  local message=status..(detail and ': '..tostring(detail) or '')
+  warn(s,status..'|'..s.name,message..' ('..s.name..')')
+  M.dispose(s,log)
+  return message
+end
+
+function M.play(s,volume,log,testing)
+  if volume<=0 then return false,'volume muted' end
+  if not s.file then return false,s.status end
+  if not (ac.AudioEvent and ac.AudioEvent.fromFile) then return false,'File audio API unavailable' end
+
+  M.dispose(s,log)
+  if log then log('ac.AudioEvent.fromFile options: filename='..s.file..', use3D=false, loop=false, reverbResponse=false') end
+  local loaded,event=call(log,'ac.AudioEvent.fromFile',ac.AudioEvent.fromFile,
+    {filename=s.file,use3D=false,loop=false},false)
+  if not loaded or not event then
+    return false,playbackFailure(s,'WAV could not be loaded',loaded and 'no event returned' or event,log),false,false
+  end
+  s.event=event
+  local checked,valid=call(log,'Fresh AudioEvent:isValid',function() return event:isValid() end)
+  if not checked then
+    return false,playbackFailure(s,'AudioEvent validation failed',valid,log),nil,false
+  end
+  if not valid then
+    return false,playbackFailure(s,'WAV could not be loaded','fresh event is invalid',log),false,false
+  end
+  -- Use the slider's linear gain once on the very handle that will start.
+  local function setGain()
+    event.cameraInteriorMultiplier=1
+    event.cameraExteriorMultiplier=1
+    event.cameraTrackMultiplier=1
+    event.volume=volume
+    return event.volume
+  end
+  if log then log('Requested AudioEvent.volume='..tostring(volume)) end
+  local set,before=call(log,'AudioEvent.volume assignment/readback',setGain)
+  if not set then
+    return false,playbackFailure(s,'AudioEvent gain configuration failed',before,log),true,false
+  end
+  local started,result=call(log,'AudioEvent:start',function() return event:start() end)
+  if not started then
+    return false,playbackFailure(s,'AudioEvent:start failed',result,log),true,false
+  end
+  -- Some playback backends reinitialize channel properties on start. Read
+  -- the started handle and restore the requested values if they changed.
+  local gainOK,after,interior,exterior,track=pcall(function()
+    return event.volume,event.cameraInteriorMultiplier,event.cameraExteriorMultiplier,event.cameraTrackMultiplier
+  end)
+  if log then
+    if gainOK then
+      log(string.format('AudioEvent gain | requested=%s | pre-start=%s | post-start=%s | camera multipliers=%s,%s,%s',
+        tostring(volume),tostring(before),tostring(after),tostring(interior),tostring(exterior),tostring(track)))
+    else log('AudioEvent post-start readback pcall=false error='..tostring(after)) end
+  end
+  if gainOK and (type(after)~='number' or math.abs(after-volume)>1e-6 or interior~=1 or exterior~=1 or track~=1) then
+    call(log,'AudioEvent gain restore/readback',setGain)
+  end
+  s.testing=testing==true
+  s.status='Ready'
+  if log then call(log,'AudioEvent:isPlaying after start',function() return event:isPlaying() end) end
+  return true,'start returned '..tostring(result),true,true
+end
+
+function M.test(s,volume,log)
+  if volume<=0 then
+    if log then log('Configured volume is 0. Using 0.65 for this test only') end
+    volume=.65
+  end
+  return M.play(s,volume,log,true)
+end
+
+return M
+
+````
+
+## apps/lua/HaloHUD/drs_chime.lua
+
+````lua
+-- Rising-edge detection and session-scoped car classification.
+local ZoneMath=require('drs_zone_math')
+local M={}
+local STARTUP_GRACE_SECONDS=5
+function M.new()
+  return {clock=0,lastPlayed=-math.huge,classes={},inside=false,outsideSeconds=0,availableTravel=0,resetAt=0,slowSeconds=0,frame=0}
+end
+
+function M.reset(s)
+  s.resetAt=s.clock
+  s.learnSeeded=false
+  s.hasDriven=false
+  s.slowSeconds=0
+  s.slowReason=nil
+  s.previous=nil
+  s.previousActive=nil
+  s.activeRise=false
+  s.position=nil
+  s.inPits=nil
+  s.outsideSeconds=0
+  s.availableTravel=0
+  s.latchedZone=nil
+  s.inside=false
+end
+
+-- Check for discontinuities before considering an availability edge. Compare
+-- signed wrapped travel so a normal crossing of the timing line stays valid.
+function M.sample(s,car,dt,trackLength)
+  local pos=car.splinePosition
+  if type(pos)~='number' or not (pos>=0 and pos<=1) then
+    M.reset(s)
+    return false,'invalid spline position'
+  end
+  local pits=car.isInPitlane==true or car.isInPit==true
+  local delta=0
+  if s.position then
+    local rawDelta=pos-s.position
+    delta=rawDelta
+    if delta>.5 then delta=delta-1 elseif delta<-.5 then delta=delta+1 end
+    local maxJump=.025
+    if trackLength and trackLength>0 then
+      maxJump=math.min(.1,math.max(25,math.abs(car.speedKmh or 0)/3.6*math.min(dt,.5)*3)/trackLength)
+    end
+    if math.abs(delta)>maxJump then
+      M.reset(s);s.position=pos;s.inPits=pits
+      return false,'teleport',delta,rawDelta,maxJump
+    end
+  end
+  if pits or s.inPits then
+    -- Reset on entering/leaving pits. Remaining in pits is one continuous
+    -- observation, so sustained evidence can accumulate after the grace period.
+    if s.inPits~=pits then M.reset(s) end
+    s.position=pos;s.inPits=pits
+    return false,'pit lane'
+  end
+  s.position=pos;s.inPits=pits
+  return true,nil,math.max(0,delta)
+end
+
+function M.overrideList(value)
+  local ids={}
+  for id in value:gmatch('[^,%s;]+') do ids[id:lower()]=true end
+  return ids
+end
+
+function M.session(s)
+  M.reset(s)
+  s.classes={}
+  M.resetTrace(s)
+end
+
+local function classify(s,id,value,reason,debug,car)
+  local previous=s.classes[id]
+  if previous==value or previous=='free_use' then return end
+  s.classes[id]=value
+  if debug then
+    debug(string.format('classification: %s %s -> %s (%s) | frame=%d | splinePosition=%s | speedKmh=%s | isInPitlane=%s | isInPit=%s | drsAvailable=%s',
+      id,previous or 'unknown',value,reason,s.frame,tostring(car.splinePosition),tostring(car.speedKmh),
+      tostring(car.isInPitlane),tostring(car.isInPit),tostring(car.drsAvailable)))
+  end
+end
+
+function M.status(s,reason,debug,attempt)
+  if reason==s.reason and not attempt then return end
+  s.reason=reason
+  if reason and debug then debug('suppression: '..reason) end
+end
+
+function M.triggerMode(cfg,override)
+  if override=='on' or cfg.drsTriggerMode=='SPLINE' then return 'SPLINE' end
+  return 'AUTO'
+end
+
+local function crossingZone(zones,from,to,travel,margin)
+  if not from or travel<=0 then return nil end
+  local first,distance
+  for i,item in ipairs(zones) do
+    local toStart=(item.start-from)%1
+    if toStart>0 and toStart<=travel+1e-9 and (not distance or toStart<distance) then
+      if ZoneMath.isInsideZone(to,item.start,item.finish) or ZoneMath.distance(to,item.finish)<=margin then
+        first,distance=i,toStart
+      end
+    end
+  end
+  return first
+end
+
+function M.update(s,car,id,dt,length,zones,cfg,override,debug,sessionReady)
+  dt=math.min(.25,math.max(0,dt))
+  s.clock=s.clock+dt
+  s.frame=s.frame+1
+  local previous=s.previous
+  local previousPosition=s.position
+  local available=car.drsAvailable==true
+  s.activeRise=false
+  local classification=s.classes[id] or 'unknown'
+  if not car.drsPresent then
+    classify(s,id,'no_drs','DRS absent',debug,car)
+    M.reset(s)
+    s.classification=s.classes[id]
+    M.status(s,'no DRS',debug)
+    return false
+  end
+  if classification=='no_drs' then
+    classify(s,id,'unknown','DRS now reported',debug,car)
+    classification='unknown'
+  end
+  local speed=math.abs(car.speedKmh or 0)
+  local pits=car.isInPitlane or car.isInPit
+  local valid,reason,travel,rawDelta,jumpLimit=M.sample(s,car,dt,length)
+  local zone,nearZone,inside
+  local margin=length and length>0 and math.min(.5,cfg.drsMargin/length) or 0
+  if (valid or reason=='pit lane') and #zones>0 and s.position then
+    zone,nearZone,inside=ZoneMath.find(zones,s.position,margin)
+  end
+  s.inside=inside==true
+  if sessionReady==false then
+    s.learnSeeded=false;s.hasDriven=false;s.resetAt=s.clock
+  elseif valid and speed>=5 and travel>0 and s.learnSeeded then
+    s.hasDriven=true
+  end
+  -- First samples, placement on the grid and stationary cars inside a real
+  -- activation zone are insufficient evidence. Begin a fresh dwell after grace.
+  local slowReason=pits and 'available in pit lane' or speed<1 and s.hasDriven and 'available while stationary'
+  if available and slowReason and not nearZone and (valid or reason=='pit lane')
+    and s.learnSeeded and sessionReady~=false and s.clock-s.resetAt>=STARTUP_GRACE_SECONDS then
+    if s.slowReason~=slowReason then s.slowSeconds=0;s.slowReason=slowReason end
+    local elapsedAfterGrace=s.clock-s.resetAt-STARTUP_GRACE_SECONDS
+    s.slowSeconds=s.slowSeconds+math.min(dt,elapsedAfterGrace)
+    if s.slowSeconds>=cfg.drsFreeSeconds then classify(s,id,'free_use',slowReason,debug,car) end
+  else
+    s.slowSeconds=0;s.slowReason=nil
+  end
+  if valid or reason=='pit lane' then s.learnSeeded=sessionReady~=false end
+  if valid and sessionReady~=false and available and not nearZone and speed>=1 then
+    s.outsideSeconds=s.outsideSeconds+dt
+    s.availableTravel=s.availableTravel+travel
+    if (#zones>0 and s.outsideSeconds>=cfg.drsFreeSeconds)
+      or (#zones==0 and (s.availableTravel>=.35 or s.outsideSeconds>=45)) then
+      classify(s,id,'free_use','sustained availability away from known zones',debug,car)
+    end
+  else
+    s.outsideSeconds=0;s.availableTravel=0
+  end
+  s.classification=s.classes[id] or 'unknown'
+  if not valid then
+    if reason=='teleport' and debug then
+      debug(string.format('state reset: teleport | splinePosition=%.6f | spline delta=%+.6f | raw delta=%+.6f | limit=%.6f',
+        s.position,travel,rawDelta,jumpLimit))
+    end
+    M.status(s,reason,debug,reason=='teleport')
+    return false
+  end
+  local active=car.drsActive==true
+  s.activeRise=s.previousActive==false and active
+  s.previousActive=active
+  s.previous=available
+  if s.latchedZone and nearZone~=s.latchedZone then s.latchedZone=nil end
+  if previous==nil then
+    s.latchedZone=inside and zone or nil
+    M.status(s,zone and 'started in zone' or available and 'already available on first sample' or 'initial sample',debug)
+    return false
+  end
+  if M.triggerMode(cfg,override)=='SPLINE' then
+    if #zones==0 then M.status(s,'no track zones for spline trigger',debug);return false end
+    local crossed=crossingZone(zones,previousPosition,s.position,travel,margin)
+    if not crossed then return false end
+    if override=='off' then M.status(s,'override off',debug,true);return false end
+    if s.latchedZone==crossed then M.status(s,'already cued in zone',debug,true);return false end
+    if s.clock-s.lastPlayed<cfg.drsCooldown then M.status(s,'cooldown',debug,true);return false end
+    return true,crossed
+  end
+  if not available or previous then
+    if debug and s.inside and not available then M.status(s,'DRS unavailable in zone',debug) end
+    return false
+  end
+  if override=='off' then M.status(s,'override off',debug,true);return false end
+  if s.classification=='free_use' then M.status(s,'free-use car',debug,true);return false end
+  if #zones>0 and not zone then M.status(s,'outside activation zone',debug,true);return false end
+  if speed<5 then M.status(s,'speed below 5 km/h',debug,true);return false end
+  if car.drsActive then M.status(s,'DRS already active at availability edge',debug,true);return false end
+  if zone then classify(s,id,'zone_restricted','availability rose at activation',debug,car) end
+  s.classification=s.classes[id] or 'unknown'
+  if zone and s.latchedZone==zone then M.status(s,'already cued in zone',debug,true);return false end
+  if s.clock-s.lastPlayed<cfg.drsCooldown then M.status(s,'cooldown',debug,true);return false end
+  return true,zone
+end
+
+function M.played(s,zone,debug)
+  s.lastPlayed=s.clock
+  s.latchedZone=zone
+  s.reason=nil
+  if debug then debug('chime fired') end
+end
+
+function M.resetTrace(s)
+  s.traceReady=false
+  s.traceAvailable=nil
+  s.traceActive=nil
+  s.traceZone=nil
+end
+
+-- Diagnostics read raw telemetry, including frames rejected by eligibility.
+-- Use wall time so the summary still advances while the simulation is paused.
+function M.trace(s,car,id,sim,zones,cooldown,now,log)
+  local pos=car and car.splinePosition
+  local available=car and car.drsAvailable
+  local active=car and car.drsActive
+  local present=car and car.drsPresent
+  local zone
+  if zones and type(pos)=='number' and pos>=0 and pos<=1 then
+    for i,item in ipairs(zones) do
+      if ZoneMath.isInsideZone(pos,item.start,item.finish) then zone=item.index or i-1;break end
+    end
+  end
+  local classification=s.classes[id] or 'unknown'
+  if not s.traceReady or s.traceAvailable~=available or s.traceActive~=active or s.traceZone~=zone then
+    local place=' | splinePosition='..tostring(pos)..' | in-zone='..tostring(zone or 'none')
+      ..' | classification: '..classification
+    if not s.traceReady or s.traceAvailable~=available then
+      log('drsAvailable '..tostring(s.traceAvailable)..' -> '..tostring(available)..place)
+    end
+    if not s.traceReady or s.traceActive~=active then
+      log('drsActive '..tostring(s.traceActive)..' -> '..tostring(active)..place)
+    end
+    if s.traceReady and s.traceZone~=zone then
+      log('zone '..tostring(s.traceZone or 'none')..' -> '..tostring(zone or 'none')..place)
+    end
+    s.traceReady=true
+    s.traceAvailable=available;s.traceActive=active;s.traceZone=zone
+  end
+  if not s.nextTrace or now>=s.nextTrace then
+    s.nextTrace=now+1
+    log(string.format('state | car=%s | drsPresent=%s | drsAvailable=%s | drsActive=%s | splinePosition=%s | in-zone=%s | classification=%s | cooldown=%.2fs | replay=%s | paused=%s | trigger mode=%s | last suppression=%s',
+      id,tostring(present),tostring(available),tostring(active),tostring(pos),tostring(zone or 'none'),
+      classification,math.max(0,cooldown-(s.clock-s.lastPlayed)),
+      tostring(sim and (sim.isReplayActive==true or sim.isReplayOnlyMode==true) or false),
+      tostring(sim and sim.isPaused==true or false),s.triggerLabel or 'DRS availability (auto)',s.reason or 'none'))
+  end
+end
+
+return M
+
+````
+
+## apps/lua/HaloHUD/drs_zone_math.lua
+
+````lua
+-- Normalized, inclusive spline intervals. This module runs in plain Lua.
+local M={}
+function M.isInsideZone(pos,start,finish)
+  if start<=finish then return pos>=start and pos<=finish end
+  return pos>=start or pos<=finish
+end
+
+function M.distance(a,b)
+  local distance=math.abs(a-b)
+  return math.min(distance,1-distance)
+end
+
+-- DETECTION is recorded for diagnostics, but only START/END describe where
+-- DRS can be activated. A small margin around START tolerates telemetry lag.
+function M.find(zones,pos,margin)
+  local nearStart,nearBoundary
+  for i,zone in ipairs(zones) do
+    if M.isInsideZone(pos,zone.start,zone.finish) then return i,i,true end
+    if M.distance(pos,zone.start)<=margin then nearStart=nearStart or i end
+    if M.distance(pos,zone.finish)<=margin then nearBoundary=nearBoundary or i end
+  end
+  return nearStart,nearStart or nearBoundary,false
+end
+return M
+
+````
+
+## apps/lua/HaloHUD/drs_zones.lua
+
+````lua
+local M={}
+local function normalized(value)
+  local n=tonumber(value)
+  return n and n>=0 and n<=1 and n or nil
+end
+
+function M.parse(text)
+  local zones,current={},nil
+  for line in text:gmatch('[^\r\n]+') do
+    line=line:gsub('^\239\187\191',''):gsub('[;#].*$','')
+    local section=line:match('^%s*%[([^%]]+)%]%s*$')
+    if section then
+      current=nil
+      local index=tonumber(section:upper():match('^ZONE_(%d+)$'))
+      if index then current={index=index};zones[#zones+1]=current end
+    elseif current then
+      local key,value=line:match('^%s*(%a+)%s*=%s*(.-)%s*$')
+      if key then
+        key=key:upper()
+        if key=='START' then current.start=normalized(value)
+        elseif key=='END' then current.finish=normalized(value)
+        elseif key=='DETECTION' then current.detection=normalized(value) end
+      end
+    end
+  end
+  for i=#zones,1,-1 do
+    local z=zones[i]
+    if not z.start or not z.finish or z.start==z.finish then table.remove(zones,i) end
+  end
+  return zones
+end
+
+function M.load()
+  if not io.load then return {},nil,'File read API unavailable' end
+  local candidates={}
+  if ac.getTrackDataFilename then
+    local ok,path=pcall(ac.getTrackDataFilename,'drs_zones.ini')
+    if ok and type(path)=='string' and path~='' then candidates[1]=path end
+  end
+  if ac.getFolder and ac.getTrackID and ac.FolderID then
+    local ok,base=pcall(function()
+      return ac.getFolder(ac.FolderID.Root)..'/content/tracks/'..ac.getTrackID()..'/data/drs_zones.ini'
+    end)
+    if ok and base~=candidates[1] then candidates[#candidates+1]=base end
+  end
+  for _,path in ipairs(candidates) do
+    local ok,contents=pcall(io.load,path)
+    if ok and type(contents)=='string' then
+      local zones=M.parse(contents)
+      if #zones>0 then return zones,path end
+    end
+  end
+  return {},nil,'No readable DRS zones in '..(#candidates>0 and table.concat(candidates,' or ') or 'track data paths')
+end
+return M
 
 ````
 
@@ -180,60 +1266,171 @@ return {["labels"]={["texture"]="assets/labels.png",["cap"]=52,["glyphs"]={["32"
 ## apps/lua/HaloHUD/HaloHUD.lua
 
 ````lua
--- HaloHUD for Assetto Corsa 1.10.1, original screen-space artwork. CSP 0.2.0+ (build 2651).
+-- HaloHUD for Assetto Corsa 1.11.1, original screen-space artwork. CSP 0.2.0+ (build 2651).
 -- Required UI/telemetry calls were checked against the shipped 0.2.0 SDK.
 local Telemetry=require('telemetry')
 local Settings=require('settings')
 local Renderer=require('renderer')
+local HUDDrag=require('hud_drag')
+local diagnostics={}
 local Aero=require('aero')
 local aero=Aero.new()
 local GearMotion=require('gear_motion')
 local gearMotion=GearMotion.new()
 local LeaderboardMotion=require('leaderboard_motion')
 local leaderboardMotion=LeaderboardMotion.new()
+local DRSChime=require('drs_chime')
+local DRSAudio=require('drs_audio')
+local drs=DRSChime.new()
+-- Script-scope state holds a strong reference to the CSP audio event.
+local drsAudio=DRSAudio.new(__dirname..'/sounds')
+local DRSZones=require('drs_zones')
+local zones,zonePath,zoneError
+local forceOn,forceOff
+local loggedZoneFailure,zoneDebugLogged
 local cfg, activeCfg, renderer, oldWidth, oldHeight
+local function drsLog(message)
+  if ac.log then pcall(ac.log,'[HaloHUD DRS] '..message) end
+end
+local function diagnosticLog() return diagnostics.drsLog and drsLog or nil end
+local function resetDRSSession()
+  if diagnostics.drsLog then drsLog('state reset: session start or restart') end
+  DRSChime.session(drs)
+  DRSAudio.stop(drsAudio)
+  drs.session=nil
+  zones,zonePath,zoneError=nil,nil,nil
+  zoneDebugLogged=false
+end
+local drsSessionHook
+if ac.onSessionStart then
+  local ok,hook=pcall(ac.onSessionStart,resetDRSSession)
+  if ok then drsSessionHook=hook end
+end
 local state=Telemetry.new()
 local demoTime, rowTimer, previousMode = 0, 0, nil
-local enabled, forceDemo, profile=false,false,false
+local enabled=false
 local cpu={update=0,draw=0,maxDraw=0,frames=0}
 local errorMessage=nil
 local statusMessage=nil
 local dirty,saveTimer=false,0
-local dragMode,dragging=false,false
+local drag={}
 local function markDirty()
   dirty=true; saveTimer=0.4; statusMessage='Saving settings...'
 end
+local function finishDrag()
+  if drag.changed then markDirty() end
+  drag.startX,drag.changed=nil,false
+end
 local function saveConfig()
-  cfg.enabled=enabled; cfg.profileCPU=profile
   local ok,err=pcall(Settings.save,__dirname..'/config.ini',cfg)
   dirty=not ok; saveTimer=ok and 0 or 2
   errorMessage=not ok and tostring(err) or nil
   statusMessage=ok and 'Saved config.ini.' or nil
 end
 ac.onRelease(function()
+  finishDrag()
   if cfg and dirty then saveConfig() end
+  DRSAudio.dispose(drsAudio)
+  drsSessionHook=nil
 end)
 
 local function loadConfig()
-  cfg=Settings.read(ac.INIConfig.load(__dirname..'/config.ini'))
+  local migratedLock
+  cfg,migratedLock=Settings.read(ac.INIConfig.load(__dirname..'/config.ini'))
   enabled=cfg.enabled
-  forceDemo=cfg.demo=='ON'
-  profile=cfg.profileCPU
+  Settings.diagnostics(cfg,diagnostics)
   dirty=false; saveTimer=0
+  if migratedLock then markDirty() end
   renderer=nil; activeCfg=nil; rowTimer=0; errorMessage=nil
-  dragging=false
+  drag.startX,drag.changed,drag.doubleClick=nil,false,false
+  DRSChime.reset(drs)
+  DRSChime.resetTrace(drs)
+  if diagnostics.drsLog then drsLog('state reset: config loaded') end
+  forceOn=DRSChime.overrideList(cfg.drsForceOn)
+  forceOff=DRSChime.overrideList(cfg.drsForceOff)
+  DRSAudio.scan(drsAudio)
+  zoneDebugLogged=false
+  DRSAudio.select(drsAudio,cfg.drsSound,diagnosticLog(),cfg.drsEnabled)
 end
 
--- Only this adapter touches CSP; telemetry.lua can be tested with plain tables.
-local function updateTelemetry(dt)
+local drsModeNames={AUTO='DRS availability (auto)',SPLINE='Zone entry (spline)'}
+local function updateDRS(dt,sim,car,carID,mode)
+  local debug=diagnosticLog()
+  local key=drs.key or ''
+  local override=forceOff[key] and 'off' or forceOn[key] and 'on'
+  if (cfg.drsEnabled or debug) and mode=='live' then
+    local focused=sim.focusedCar
+    if drs.session~=sim.currentSessionIndex then
+      resetDRSSession()
+      drs.session=sim.currentSessionIndex
+    end
+    if drs.focus~=focused or drs.carID~=carID then
+      if debug then debug('state reset: car or focus changed') end
+      DRSChime.reset(drs)
+      DRSAudio.stop(drsAudio)
+      drs.focus,drs.carID=focused,carID
+      drs.key=carID:lower()
+      DRSChime.resetTrace(drs)
+    end
+    override=forceOff[drs.key] and 'off' or forceOn[drs.key] and 'on'
+    local suppression
+    if not cfg.drsEnabled then suppression='chime disabled'
+    elseif sim.isReplayActive or sim.isReplayOnlyMode then suppression='replay'
+    elseif sim.isPaused then suppression='paused'
+    elseif (focused and focused>=0 and focused~=0) or car.isAIControlled then suppression='spectating or AI control'
+    elseif not car.physicsAvailable or carID=='' then suppression='player physics unavailable' end
+    if debug or not suppression then
+      if not zones then
+        zones,zonePath,zoneError=DRSZones.load()
+        if zoneError and not loggedZoneFailure then
+          drsLog(zoneError..'; using edge-only detection')
+          loggedZoneFailure=true
+          zoneDebugLogged=true
+        end
+      end
+      if debug and not zoneDebugLogged then
+        debug(zonePath and string.format('Loaded %d zones from %s',#zones,zonePath) or zoneError)
+        zoneDebugLogged=true
+      end
+    end
+    if suppression then
+      if debug and drs.position~=nil then debug('state reset: '..suppression) end
+      DRSChime.reset(drs)
+      DRSAudio.stop(drsAudio)
+      DRSChime.status(drs,suppression,debug)
+    else
+      local sessionReady=sim.isSessionStarted~=false and not sim.isInMainMenu
+      local fire,zone=DRSChime.update(drs,car,drs.key,dt,sim.trackLengthM,zones,cfg,override,debug,sessionReady)
+      local activeTest=diagnostics.activeCue
+      if activeTest and fire then DRSChime.status(drs,'normal cue disabled by active-edge diagnostic',debug,true) end
+      if (activeTest and drs.activeRise) or (not activeTest and fire) then
+        local played,result,valid,started=DRSAudio.play(drsAudio,cfg.drsVolume,debug)
+        if debug then
+          debug('chime fired | playback='..tostring(played)..' | fresh valid='..tostring(valid)
+            ..' | start succeeded='..tostring(started)..' | trigger='..(activeTest and 'debug drsActive' or DRSChime.triggerMode(cfg,override)=='SPLINE' and 'spline START' or 'drsAvailable')..' | '..result)
+        end
+        if played then
+          if not activeTest then DRSChime.played(drs,zone) end
+        else DRSChime.status(drs,result,debug,true) end
+      end
+    end
+  else
+    DRSChime.reset(drs)
+    DRSAudio.stop(drsAudio)
+    DRSChime.status(drs,cfg.drsEnabled and 'no live player telemetry' or 'chime disabled',debug)
+  end
+  if debug then
+    drs.triggerLabel=diagnostics.activeCue and 'Debug drsActive' or drsModeNames[DRSChime.triggerMode(cfg,override)]
+    DRSChime.trace(drs,car,carID:lower(),sim,zones,cfg.drsCooldown,os.preciseClock(),debug)
+  end
+end
+
+local function updateTelemetry(dt,sim,car,carID,mode)
   demoTime=demoTime+math.max(0,dt)
-  local sim=ac.getSim()
-  local car=sim and sim.carsCount>0 and ac.getCar(0) or nil
-  local effective=Settings.effective(cfg,car and ac.getCarID(0) or '',car)
+  local effective=Settings.effective(cfg,carID,car)
   if not activeCfg or effective.rpmMax~=activeCfg.rpmMax or effective.revLimit~=activeCfg.revLimit
     or effective.gearCount~=activeCfg.gearCount then renderer=nil end
   activeCfg=effective
-  local mode=(forceDemo or (not car and cfg.demo~='OFF')) and 'demo' or (car and 'live' or 'empty')
   if mode~=previousMode then
     state=Telemetry.new(); rowTimer=0; previousMode=mode
     aero=Aero.new(); gearMotion=GearMotion.new(); leaderboardMotion=LeaderboardMotion.new()
@@ -270,142 +1467,280 @@ function script.update(dt)
     local ok,err=pcall(loadConfig)
     if not ok then errorMessage=tostring(err); return end
   end
+  -- CSP may stop calling drawHUD when the game's UI is hidden mid-drag.
+  if drag.startX then
+    local uiState=ac.getUI()
+    if uiState.appsHidden or uiState.uiHidden then
+      finishDrag()
+      drag.doubleClick=false
+    end
+  end
   -- Run persistence even when the HUD is disabled or controls are closed.
-  if dirty then
+  -- A pending save from another control must not capture an intermediate offset.
+  if dirty and not drag.startX then
     saveTimer=saveTimer-math.max(0,dt)
     if saveTimer<=0 then saveConfig() end
   end
-  if not enabled then return end
-  local start=profile and os.preciseClock() or 0
-  updateTelemetry(dt)
-  if profile then cpu.update=(os.preciseClock()-start)*1000 end
+  if not enabled and not cfg.drsEnabled and not diagnostics.drsLog then return end
+  local start=diagnostics.profile and os.preciseClock() or 0
+  local sim=ac.getSim()
+  local car=sim and sim.carsCount>0 and ac.getCar(0) or nil
+  local carID=car and ac.getCarID(0) or ''
+  local mode=(diagnostics.forceDemo or (not car and cfg.demo~='OFF')) and 'demo' or (car and 'live' or 'empty')
+  updateDRS(dt,sim,car,carID,mode)
+  if enabled then updateTelemetry(dt,sim,car,carID,mode) end
+  if diagnostics.profile then cpu.update=(os.preciseClock()-start)*1000 end
 end
 
-function script.drawHUD()
-  if not cfg or not enabled or previousMode=='empty' then dragging=false; return end
-  local uiState=ac.getUI()
-  -- CSP's own visibility flags follow Ctrl+H and global UI hiding. Do not
-  -- change ENABLED: showing the game's HUD again restores our previous state.
-  if uiState.appsHidden or uiState.uiHidden then dragging=false; return end
-  local screen=uiState.windowSize
-  local start=profile and os.preciseClock() or 0
+local function fitRenderer(screen)
   if not renderer or oldWidth~=screen.x or oldHeight~=screen.y then
     renderer=Renderer.new(activeCfg or cfg,screen.x,screen.y)
     oldWidth,oldHeight=screen.x,screen.y
   end
-  -- inputs=false gives a fixed, click-through HUD. Offsets are shared by sliders and the optional drag handle.
-  ui.beginTransparentWindow('HaloHUD:overlay',vec2(0,0),screen,true,false)
-  renderer.render(state)
-  ui.endTransparentWindow()
-  if dragMode then
-    local info=renderer.drag
-    local size=vec2(156,30)
-    local pos=vec2(math.max(8,math.min(screen.x-size.x-8,info.anchor.x-size.x/2)),
-      math.max(8,math.min(screen.y-size.y-8,info.anchor.y-size.y/2)))
-    -- Only the small handle accepts input, never the fullscreen HUD surface.
-    ui.beginTransparentWindow('HaloHUD:dragHandle',pos,size,true,true)
-    ui.invisibleButton('##HaloHUDDrag',size)
-    local held=ui.itemActive()
-    if held then
-      ui.captureMouse()
-      if dragging then
-        local delta=ui.mouseDelta()
-        if (delta.x~=0 or delta.y~=0) and delta.x==delta.x and delta.y==delta.y
-          and math.abs(delta.x)<1e6 and math.abs(delta.y)<1e6 then
-          local x=Telemetry.clamp(info.x+delta.x/info.scale,info.minX,info.maxX)
-          local y=Telemetry.clamp(info.y+delta.y/info.scale,info.minY,info.maxY)
-          if x~=cfg.x or y~=cfg.y then
-            cfg.x,cfg.y=x,y
-            renderer=nil; markDirty()
-          end
-        end
+end
+
+local function overOtherUI(uiState,x,y)
+  if uiState.wantCaptureMouse or ui.windowHovered(ui.HoveredFlags.AnyWindow) then return true end
+  -- Also respect registered original AC/Python apps that are outside ImGui.
+  for _,window in ipairs(ac.getAppWindows()) do
+    if window.visible and (window.layer==0 or window.layerDuplicate) then
+      local p,s=window.position,window.size
+      if HUDDrag.contains(x,y,p.x,p.y,p.x+s.x,p.y+s.y) then return true end
+    end
+  end
+  return false
+end
+
+local function moveHUD(x,y)
+  if x==cfg.x and y==cfg.y then return false end
+  cfg.x,cfg.y=x,y
+  -- The powertrain settings snapshot is refreshed in update(), before draw.
+  -- Synchronize offsets so a renderer rebuilt in this frame moves immediately.
+  if activeCfg then activeCfg.x,activeCfg.y=x,y end
+  renderer=nil
+  return true
+end
+
+local function overHUD(x,y,regions)
+  for _,r in ipairs(regions) do
+    if HUDDrag.contains(x,y,r.left,r.top,r.right,r.bottom) then return true end
+  end
+  return false
+end
+
+local function dragHUD(uiState)
+  local mouse=ui.mousePos()
+  local valid=mouse.x>=0 and mouse.y>=0
+  local b=renderer.drag
+  if drag.startX then
+    ui.captureMouse()
+    if valid then
+      local dx,dy=mouse.x-drag.startX,mouse.y-drag.startY
+      if drag.changed or dx~=0 or dy~=0 then
+        drag.doubleClick=false
+        local x,y=HUDDrag.offset(b,drag.x,drag.y,dx,dy)
+        if moveHUD(x,y) then drag.changed=true end
       end
     end
-    dragging=held
-    ui.drawRectFilled(vec2(),size,rgbm(0.025,0.16,0.22,0.96),5)
-    ui.setCursor(vec2(12,6));ui.text('Drag HUD')
-    ui.endTransparentWindow()
-  else dragging=false end
-  if profile then
+    if not valid or ui.mouseReleased() or not ui.mouseDown() then
+      finishDrag()
+      return
+    end
+    ui.setMouseCursor(ui.MouseCursor.ResizeAll)
+    return
+  end
+
+  local clicked,doubleClicked=ui.mouseClicked(),ui.mouseDoubleClicked()
+  local over=valid and overHUD(mouse.x,mouse.y,b.regions)
+    and not overOtherUI(uiState,mouse.x,mouse.y)
+  if clicked then drag.doubleClick=over end
+  if not over then
+    if doubleClicked then drag.doubleClick=false end
+    return
+  end
+  if doubleClicked and drag.doubleClick then
+    ui.captureMouse()
+    drag.doubleClick=false
+    if moveHUD(Settings.schema.x[2],Settings.schema.y[2]) then markDirty() end
+  elseif clicked then
+    drag.startX,drag.startY=mouse.x,mouse.y
+    drag.x,drag.y=b.x,b.y
+    ui.captureMouse()
+  end
+
+  if drag.startX or not ui.mouseDown() then ui.setMouseCursor(ui.MouseCursor.ResizeAll) end
+  if not ui.mouseDown() then ui.setTooltip('Drag to move. Double-click to reset the HUD position.') end
+end
+
+function script.drawHUD()
+  if not cfg or not enabled or previousMode=='empty' then finishDrag();drag.doubleClick=false;return end
+  local uiState=ac.getUI()
+  -- CSP's own visibility flags follow Ctrl+H and global UI hiding.
+  if uiState.appsHidden or uiState.uiHidden then finishDrag();drag.doubleClick=false;return end
+  local screen=uiState.windowSize
+  local start=diagnostics.profile and os.preciseClock() or 0
+  fitRenderer(screen)
+  if not renderer.visible then finishDrag();drag.doubleClick=false;return end
+  -- The overlay never takes focus or covers other apps with an input window.
+  ui.beginTransparentWindow('HaloHUD:overlay',vec2(0,0),screen,true,false)
+  if not cfg.lockHUD and cfg.opacity>0 then
+    dragHUD(uiState)
+    fitRenderer(screen)
+  else
+    finishDrag()
+    drag.doubleClick=false
+  end
+  renderer.render(state)
+  ui.endTransparentWindow()
+  if diagnostics.profile then
     cpu.draw=(os.preciseClock()-start)*1000
     cpu.maxDraw=math.max(cpu.maxDraw,cpu.draw); cpu.frames=cpu.frames+1
   end
 end
 
-function script.windowMain()
-  if not cfg then
-    ui.textWrapped(errorMessage or 'HaloHUD is loading.'); return
+-- Controls call the same runtime actions regardless of which tab is visible.
+local Controls=require('controls')
+local controls
+local function setControl(key,value)
+  if cfg[key]==value then return end
+  cfg[key]=value
+  if key=='showLeft' or key=='showCenter' or key=='showRight' then
+    if activeCfg then activeCfg[key]=value end
+    renderer=nil
+  elseif key=='enabled' then
+    enabled=value
+    if not value then finishDrag();drag.doubleClick=false end
+  elseif key=='lockHUD' then
+    if value then finishDrag();drag.doubleClick=false end
+  elseif key=='debugMode' or key=='debugDRS' or key=='debugDRSActive' or key=='demo' or key=='profileCPU' then
+    local wasLogging,wasActiveCue,wasProfiling=diagnostics.drsLog,diagnostics.activeCue,diagnostics.profile
+    Settings.diagnostics(cfg,diagnostics)
+    if wasLogging~=diagnostics.drsLog then
+      zoneDebugLogged=false
+      DRSChime.resetTrace(drs)
+    end
+    if wasActiveCue~=diagnostics.activeCue then drs.previousActive=nil end
+    if wasProfiling~=diagnostics.profile then cpu.maxDraw=0;cpu.frames=0 end
+  elseif key=='drsEnabled' then
+    DRSChime.reset(drs)
+    if not value then DRSAudio.dispose(drsAudio) end
+  elseif key=='drsTriggerMode' then DRSChime.reset(drs)
+  elseif key=='drsSound' then DRSAudio.select(drsAudio,value,diagnosticLog(),cfg.drsEnabled)
+  elseif key=='drsForceOn' then forceOn=DRSChime.overrideList(value)
+  elseif key=='drsForceOff' then forceOff=DRSChime.overrideList(value)
+  elseif key~='drsVolume' and key~='drsCooldown' and key~='drsMargin' and key~='drsFreeSeconds' then
+    renderer=nil
+    if key=='names' then rowTimer=0 end
   end
-  ui.text('HaloHUD for Assetto Corsa 1.10.1')
-  if ui.checkbox('Show HUD',enabled) then enabled=not enabled; markDirty() end
-  if ui.checkbox('Force demo telemetry',forceDemo) then
-    forceDemo=not forceDemo; cfg.demo=forceDemo and 'ON' or 'AUTO'; markDirty()
+  markDirty()
+end
+
+local function reloadControls()
+  local ok,err=pcall(loadConfig)
+  if not ok then errorMessage=tostring(err) end
+  controls.listError=nil
+end
+
+local function testChime()
+  local debug=diagnosticLog()
+  if debug then debug('Test chime | enabled='..tostring(cfg.drsEnabled)..' | configured volume='..tostring(cfg.drsVolume)) end
+  local played,result=DRSAudio.test(drsAudio,cfg.drsVolume,debug)
+  if debug then debug('Test chime | playback='..tostring(played)..' | '..result) end
+end
+
+local function readDRSControls(view)
+  view.drsFiles=drsAudio.files
+  view.drsSoundStatus=drsAudio.status
+  if drsAudio.status=='Ready' and not (ac.AudioEvent and ac.AudioEvent.fromFile) then
+    view.drsSoundStatus='File audio API unavailable'
   end
-  if ui.checkbox('Measure Lua CPU time',profile) then
-    profile=not profile; cpu.maxDraw=0; cpu.frames=0
-    markDirty()
+  if not cfg.debugMode then return end
+  local sim=ac.getSim()
+  local car=sim and sim.carsCount>0 and ac.getCar(0) or nil
+  local id=car and ac.getCarID(0) or ''
+  if id~=view.drsCar then view.drsKey=id:lower() end
+  view.drsCar=id
+  view.drsFile=drsAudio.file
+  view.drsClassification=drs.classes[view.drsKey] or
+    (car and car.physicsAvailable and car.drsPresent==false and 'no_drs' or 'unknown')
+  view.drsReason=drs.reason
+  if not sim then view.zoneCount=nil
+  elseif zones then view.zoneCount=#zones
+  else
+    -- The controls can display track information with audio disabled. Use a
+    -- separate read-only cache so opening this tab cannot seed the detector.
+    if view.zoneLength~=sim.trackLengthM or view.zoneConfig~=cfg or view.zoneSession~=drs.classes then
+      view.zoneLength,view.zoneConfig,view.zoneSession=sim.trackLengthM,cfg,drs.classes
+      local ok,previewZones=pcall(DRSZones.load)
+      view.previewZoneCount=ok and #previewZones or 0
+    end
+    view.zoneCount=view.previewZoneCount
   end
-  local function slider(label,key,lo,hi,fmt)
-    local v=ui.slider(label,cfg[key],lo,hi,fmt or '%.2f')
-    v=Telemetry.clamp(v,lo,hi)
-    if v~=cfg[key] then cfg[key]=v; renderer=nil; markDirty() end
+end
+
+local telemetryRows={}
+local function controlText(index,format,...)
+  local row=telemetryRows[index]
+  if not row then row={};telemetryRows[index]=row end
+  local changed=row.text==nil
+  for i=1,select('#',...) do
+    local value=select(i,...)
+    if row[i]~=value then changed=true;row[i]=value end
   end
-  ui.text('Live layout (automatically fits screen)')
-  if ui.checkbox('Drag HUD with mouse',dragMode) then
-    dragMode=not dragMode; dragging=false
-  end
-  if dragMode then
-    ui.textWrapped('Hold the Drag HUD handle above the dial and move your mouse. Turn this option off when finished. Position saves automatically.')
-  end
-  slider('HUD scale','scale',0.5,1.5)
-  slider('X offset','x',-960,960,'%.0f px')
-  slider('Y offset','y',-540,540,'%.0f px')
-  slider('Curvature','curve',0,1.6)
-  slider('Leaderboard animation','leaderboardDuration',200,900,'%.0f ms')
-  slider('Gear animation','gearDuration',150,600,'%.0f ms')
-  slider('Aero animation','aeroDuration',150,1000,'%.0f ms')
-  slider('Left timing scale','leftScale',0.5,1.5)
-  slider('Center dial scale','dialScale',0.5,1.5)
-  slider('Pedal / energy modules scale','moduleScale',0.5,1.5)
-  slider('Right powertrain scale','rightScale',0.5,1.5)
-  if ui.checkbox('Outer arc',cfg.outerArc) then cfg.outerArc=not cfg.outerArc; renderer=nil; markDirty() end
-  if ui.button('Save config.ini') then
-    saveConfig()
-  end
-  if ui.button('Reset to defaults') then
-    dragMode=false; dragging=false
-    cfg=Settings.read(nil); enabled=cfg.enabled; forceDemo=false; profile=false; renderer=nil
-    state=Telemetry.new(); rowTimer=0
-    markDirty()
-  end
-  ui.textWrapped('Changes apply immediately and save automatically after 0.4 seconds without edits. Save writes immediately. Reset restores and saves defaults. Reload reads external edits.')
-  if ui.button('Reload config.ini') then
-    local ok,err=pcall(loadConfig)
-    if not ok then errorMessage=tostring(err) end
-  end
-  if errorMessage then ui.textWrapped('Config error: '..errorMessage) end
-  if statusMessage then ui.textWrapped(statusMessage) end
+  if changed then row.text=string.format(format,...) end
+  ui.textWrapped(row.text)
+end
+
+local function drawControlTelemetry()
   if activeCfg and activeCfg.profileActive then
     local p=cfg.carProfile
-    ui.textWrapped(p.name..' | '..p.class..' | '..p.bhp..' | '..p.weight)
-    ui.textWrapped('Powertrain: '..activeCfg.powertrainSource)
-    ui.text(string.format('RPM scale %.0f | limiter %.0f | gears %d',
-      activeCfg.rpmMax,activeCfg.revLimit,activeCfg.gearCount))
+    controlText(1,'%s | %s | %s | %s',p.name,p.class,p.bhp,p.weight)
+    controlText(2,'Powertrain: %s',activeCfg.powertrainSource)
+    controlText(3,'RPM scale %.0f | limiter %.0f | gears %d',activeCfg.rpmMax,activeCfg.revLimit,activeCfg.gearCount)
     ui.textWrapped('Packed car data not exported: battery capacity, recovery calibration and camera remain unverified.')
   end
-  ui.text(string.format('Source: %s | physics: %s',previousMode or 'loading',tostring(state.physics)))
-  ui.text('Position '..state.player.position..' | '..(state.leaderFirst and 'Behind ' or 'Ahead ')..state.ahead.position..' '..state.ahead.name)
-  ui.text(string.format('Speed %.3f km/h | RPM %.0f | Gear %d',state.speed,state.rpm,state.gear))
-  ui.text(string.format('Raw brake %.3f | throttle %.3f',state.rawBrake,state.rawThrottle))
-  ui.text(string.format('ERS %s | charge %.3f | input %.3f',tostring(state.ers),state.charge,state.ersInput))
-  ui.text(string.format('DRS present %s | active %s',tostring(state.aeroPresent),tostring(state.aeroActive)))
-  if profile then
-    ui.text(string.format('Lua update %.3f ms | draw %.3f ms',cpu.update,cpu.draw))
-    ui.text(string.format('Peak draw %.3f ms / %d frames',cpu.maxDraw,cpu.frames))
-    ui.textWrapped('CPU submission only. Use CSP profiling and an on/off GPU frame-time comparison for the 0.3 ms target. Exclude initial warm-up.')
+  controlText(4,'Source: %s | physics: %s',previousMode or 'loading',tostring(state.physics))
+  controlText(5,'Position %s | %s %s %s',state.player.position,state.leaderFirst and 'Behind' or 'Ahead',state.ahead.position,state.ahead.name)
+  controlText(6,'Speed %.3f km/h | RPM %.0f | Gear %d',state.speed,state.rpm,state.gear)
+  controlText(7,'Raw brake %.3f | throttle %.3f',state.rawBrake,state.rawThrottle)
+  controlText(8,'ERS %s | charge %.3f | input %.3f',tostring(state.ers),state.charge,state.ersInput)
+  controlText(9,'DRS present %s | active %s',tostring(state.aeroPresent),tostring(state.aeroActive))
+  if diagnostics.profile then
+    controlText(10,'Lua update %.3f ms | draw %.3f ms',cpu.update,cpu.draw)
+    controlText(11,'Peak draw %.3f ms / %d frames',cpu.maxDraw,cpu.frames)
+    ui.textWrapped('These are Lua CPU submission times. Measure GPU frame time in CSP after warm-up.')
   end
-  if renderer then ui.text(string.format('Textured quads: %d',renderer.quads)) end
+  if renderer then controlText(12,'Textured quads: %d',renderer.quads) end
 end
+
+controls=Controls.new{
+  set=setControl,save=saveConfig,reload=reloadControls,testChime=testChime,
+  readDRS=readDRSControls,readTelemetry=drawControlTelemetry
+}
+
+function script.windowMain()
+  if not cfg then ui.textWrapped(errorMessage and 'Could not load config.ini.' or 'HaloHUD is loading.');return end
+  Controls.draw(controls,cfg,errorMessage,statusMessage)
+end
+
+````
+
+## apps/lua/HaloHUD/hud_drag.lua
+
+````lua
+-- Mouse and projected bounds are in UI pixels. Offsets are in design pixels.
+local M={}
+
+function M.contains(x,y,left,top,right,bottom)
+  return x>=left and x<=right and y>=top and y<=bottom
+end
+
+function M.offset(bounds,x,y,dx,dy)
+  return math.max(bounds.minX,math.min(bounds.maxX,x+dx/bounds.scale)),
+    math.max(bounds.minY,math.min(bounds.maxY,y+dy/bounds.scale))
+end
+
+return M
 
 ````
 
@@ -688,7 +2023,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 [ABOUT]
 NAME = HaloHUD for Assetto Corsa
 AUTHOR = HaloHUD contributors
-VERSION = 1.10.1
+VERSION = 1.11.1
 DESCRIPTION = Unofficial, F1-inspired onboard telemetry overlay for Assetto Corsa.
 REQUIRED_VERSION = 2651
 
@@ -700,8 +2035,8 @@ ID = controls
 NAME = HaloHUD controls
 ICON = icon.png
 FUNCTION_MAIN = windowMain
-SIZE = 460, 780
-MIN_SIZE = 350, 320
+SIZE = 560, 680
+MIN_SIZE = 390, 340
 
 [UI_CALLBACKS]
 IN_GAME = drawHUD
@@ -729,6 +2064,8 @@ function M.new(cfg, width, height)
   local self={cfg=cfg, static={}, textCache={}, cacheCount=0, quads=0}
   local theme=themes[cfg.theme] or themes.TEAL
   local opacity=cfg.opacity
+  local left,center,right=cfg.showLeft~=false,cfg.showCenter~=false,cfg.showRight~=false
+  self.visible=left or center or right or cfg.outerArc
   self.c={accent=rgba(theme.accent,opacity), dim=rgba(theme.secondary,opacity),
     blue=rgba(theme.blue,opacity), green=rgba(theme.green,opacity),
     white=rgba({255,255,255},opacity), glass=rgba({255,255,255},opacity),
@@ -761,22 +2098,37 @@ function M.new(cfg, width, height)
   end
   local arcEnd=sideInner+522*math.max(ls,rs)
   local arcV=-math.max(196,180*ds+20,150*math.max(ls,rs,ms)+20)
-  -- Conservative region envelopes include dynamic labels and battery.
-  -- Fit the complete composition, then clamp offsets so controls cannot clip it.
+  -- Fit the complete composition so toggling a zone never moves the others.
+  -- Keep each projected envelope for hit testing only the visible regions.
   local minX,maxX,minY,maxY=0,0,0,0
-  local function bounds(u,v,flat,g)
-    local x,y=localPoint(u,v,flat,g)
-    minX=math.min(minX,x);maxX=math.max(maxX,x)
-    minY=math.min(minY,y);maxY=math.max(maxY,y)
+  local hitRegions={}
+  local function envelope(u0,u1,v0,v1,group,visible,steps)
+    local x0,x1,y0,y1=math.huge,-math.huge,math.huge,-math.huge
+    for i=0,steps do
+      local u=u0+(u1-u0)*i/steps
+      local x,y=localPoint(u,v0,group=='dial',group)
+      x0,x1,y0,y1=math.min(x0,x),math.max(x1,x),math.min(y0,y),math.max(y1,y)
+      x,y=localPoint(u,v1,group=='dial',group)
+      x0,x1,y0,y1=math.min(x0,x),math.max(x1,x),math.min(y0,y),math.max(y1,y)
+    end
+    minX,maxX,minY,maxY=math.min(minX,x0),math.max(maxX,x1),math.min(minY,y0),math.max(maxY,y1)
+    if visible then hitRegions[#hitRegions+1]={left=x0,right=x1,top=y0,bottom=y1} end
   end
-  for _,r in ipairs({{-840,-318,-145,130,'left'}, {318,840,-100,130,'right'},
-      {-310,-160,-150,150,'curvedModule'}, {160,310,-150,150,'curvedModule'},
-      {-184,184,-205,230,'dial'}}) do
-    for i=0,64 do for _,v in ipairs({r[3],r[4]}) do
-      bounds(r[1]+(r[2]-r[1])*i/64,v,r[5]=='dial',r[5])
-    end end
+  envelope(-840,-318,-145,130,'left',left,64)
+  envelope(318,840,-100,130,'right',right,64)
+  envelope(-310,-160,-150,150,'curvedModule',center,64)
+  envelope(160,310,-150,150,'curvedModule',center,64)
+  envelope(-184,184,-205,230,'dial',center,64)
+  if cfg.outerArc then
+    envelope(-arcEnd,arcEnd,arcV,arcV,'arc',false,96)
+    -- Narrow hit regions follow the arc instead of covering the open space below it.
+    for i=0,23 do
+      local u=-arcEnd+2*arcEnd*i/24
+      local x0,y0=localPoint(u,arcV,false,'arc')
+      local x1,y1=localPoint(u+2*arcEnd/24,arcV,false,'arc')
+      hitRegions[#hitRegions+1]={left=x0,right=x1,top=math.min(y0,y1)-8,bottom=math.max(y0,y1)+8}
+    end
   end
-  if cfg.outerArc then for i=0,96 do bounds(-arcEnd+2*arcEnd*i/96,arcV,false,'arc') end end
   local s=math.min(math.min(width/1920,height/1080)*cfg.scale,
     (width-32)/(maxX-minX),(height-32)/(maxY-minY))
   local ox=math.max(16-minX*s,math.min(width-16-maxX*s,width/2+cfg.x*s))
@@ -787,7 +2139,11 @@ function M.new(cfg, width, height)
   end
   -- Mouse deltas use CSP UI pixels. Convert through the actual fitted scale,
   -- and start from the visible position (not a previously clamped request).
-  self.drag={anchor=self.point(0,-214,true),scale=s,
+  for _,r in ipairs(hitRegions) do
+    r.left,r.right=ox+r.left*s,ox+r.right*s
+    r.top,r.bottom=oy+r.top*s,oy+r.bottom*s
+  end
+  self.drag={regions=hitRegions,scale=s,left=ox+minX*s,right=ox+maxX*s,top=oy+minY*s,bottom=oy+maxY*s,
     x=(ox-width/2)/s,y=(oy-height/2)/s+5,
     minX=math.max(-960,(16-minX*s-width/2)/s),
     maxX=math.min(960,(width-16-maxX*s-width/2)/s),
@@ -873,28 +2229,36 @@ function M.new(cfg, width, height)
   local originalDraw=self.draw
   self.draw=function(q,color,alpha) self.static[#self.static+1]={q,color,alpha} end
   local c=self.c; local n=cfg.strips
-  self.image('assets/left_fill.png',-830,-92,512,192,c.glass,false,n)
-  self.image('assets/left_rim.png',-830,-92,512,192,c.accent,false,n)
-  self.image('assets/right_fill.png',318,-92,512,192,c.glass,false,n)
-  self.image('assets/right_rim.png',318,-92,512,192,c.accent,false,n)
-  for side=1,2 do
-    self.draw(gaugeQuad(side,-150,150,'assets/curved_pedal_fill.png'),rgba({18,52,66},opacity))
-    self.draw(gaugeQuad(side,-150,150,'assets/curved_pedal_rim.png'),c.accent)
-    self.draw(gaugeQuad(side,-150,150,'assets/curved_energy_rim.png'),rgba({50,150,194},opacity))
-    self.draw(gaugeQuad(side,-150,150,'assets/curved_energy_fill.png'),rgba({10,50,112},opacity))
+  if left then
+    self.image('assets/left_fill.png',-830,-92,512,192,c.glass,false,n)
+    self.image('assets/left_rim.png',-830,-92,512,192,c.accent,false,n)
   end
-  self.text('BRAKE',-246,127,12,c.dim,nil,'center',nil,false,1,'curvedModule')
-  self.text('THROTTLE',246,127,12,c.dim,nil,'center',nil,false,1,'curvedModule')
-  self.image('assets/dial_fill.png',-180,-180,360,360,c.glass,true)
-  self.image('assets/dial_rim.png',-180,-180,360,360,c.accent,true)
-  self.text('ACTIVE',347,-62,12,c.white)
-  self.text('AERO',347,-44,12,c.white)
-  self.text('GEARS',620,-57,12,c.dim,nil,'center')
-  self.text('RPM x1000',624,108,12,c.dim,nil,'center')
-  for i=0,15 do
-    local u=430+i*24
-    self.rect(u,62,1.2,5,c.dim)
-    if i%3==0 then self.text(string.format('%g',i*cfg.rpmMax/15000),u,72,9,c.dim,nil,'center') end
+  if right then
+    self.image('assets/right_fill.png',318,-92,512,192,c.glass,false,n)
+    self.image('assets/right_rim.png',318,-92,512,192,c.accent,false,n)
+  end
+  if center then
+    for side=1,2 do
+      self.draw(gaugeQuad(side,-150,150,'assets/curved_pedal_fill.png'),rgba({18,52,66},opacity))
+      self.draw(gaugeQuad(side,-150,150,'assets/curved_pedal_rim.png'),c.accent)
+      self.draw(gaugeQuad(side,-150,150,'assets/curved_energy_rim.png'),rgba({50,150,194},opacity))
+      self.draw(gaugeQuad(side,-150,150,'assets/curved_energy_fill.png'),rgba({10,50,112},opacity))
+    end
+    self.text('BRAKE',-246,127,12,c.dim,nil,'center',nil,false,1,'curvedModule')
+    self.text('THROTTLE',246,127,12,c.dim,nil,'center',nil,false,1,'curvedModule')
+    self.image('assets/dial_fill.png',-180,-180,360,360,c.glass,true)
+    self.image('assets/dial_rim.png',-180,-180,360,360,c.accent,true)
+  end
+  if right then
+    self.text('ACTIVE',347,-62,12,c.white)
+    self.text('AERO',347,-44,12,c.white)
+    self.text('GEARS',620,-57,12,c.dim,nil,'center')
+    self.text('RPM x1000',624,108,12,c.dim,nil,'center')
+    for i=0,15 do
+      local u=430+i*24
+      self.rect(u,62,1.2,5,c.dim)
+      if i%3==0 then self.text(string.format('%g',i*cfg.rpmMax/15000),u,72,9,c.dim,nil,'center') end
+    end
   end
   -- Exactly the same image rectangle, strip boundaries, projection and skew
   -- as the timing panel; the alpha mask contains the constant-inset row outline.
@@ -929,10 +2293,7 @@ function M.new(cfg, width, height)
   for gear=0,gearCount do self.gears[gear]=self.quad(454+gear*gearStep-gearBox/2,-24,gearBox,43) end
   self.chargeBg=self.quad(-64,178,128,48,'assets/battery.png',nil,true)
 
-  function self.render(t)
-    self.quads=0
-    for i=1,#self.static do local q=self.static[i]; self.draw(q[1],q[2],q[3]) end
-    local board=t.leaderboardMotion
+  local function drawHighlight(t,board)
     if board then
       -- Crop the existing approved mask to the row, and move all projected strips
       -- through the same skew/curve as the panel. Transparent atlas margins are excluded.
@@ -944,6 +2305,9 @@ function M.new(cfg, width, height)
     local highlight=self.highlights[t.leaderFirst and 'leader' or t.solo and 'solo' or 'regular']
     for i=1,#highlight do self.draw(highlight[i],c.accent) end
     end
+  end
+
+  local function drawCenter(t)
     for side,value in ipairs({t.brake,t.throttle}) do
       for i=1,PEDAL_SEGMENTS do
         self.draw(self.pedals[side][i],c.inactive)
@@ -993,6 +2357,9 @@ function M.new(cfg, width, height)
       if t.charge>0 then self.draw(self.quad(-64,178,128*t.charge,48,'assets/battery.png',{0,0,t.charge,1},true),rgba({46,212,255},opacity)) end
       self.image('assets/bolt.png',-10,186,16,30,c.white,true)
     else self.text('--',0,193,13,c.dim,nil,'center',nil,true) end
+  end
+
+  local function drawRows(t,board)
     if board then
       local alpha=board.opponentAlpha
       if alpha>0.001 then
@@ -1019,6 +2386,9 @@ function M.new(cfg, width, height)
     self.text(t.player.name,-723,30.5+rowOffset,31,c.white,'names',nil,354)
     end
     end
+  end
+
+  local function drawPowertrain(t)
     -- DRS is a proxy for the reference's active-aero icon, not universal active aero.
     local phase=t.aeroPhase
     if phase==nil then phase=t.aeroActive and 1 or 0 end -- static fixtures
@@ -1069,8 +2439,20 @@ function M.new(cfg, width, height)
           rgbm((47-4*z)/255,(224+3*z)/255,(208-86*z)/255,opacity*f))
       end
     end
-    if t.demo then self.text('DEMO',0,-188,8,rgba({159,184,200},opacity*0.45),nil,'center',nil,true,2)
-    elseif not t.physics then self.text('PHYSICS N/A',0,244,10,c.dim,nil,'center',nil,true) end
+  end
+
+  function self.render(t)
+    self.quads=0
+    for i=1,#self.static do local q=self.static[i]; self.draw(q[1],q[2],q[3]) end
+    local board=t.leaderboardMotion
+    if left then drawHighlight(t,board) end
+    if center then drawCenter(t) end
+    if left then drawRows(t,board) end
+    if right then drawPowertrain(t) end
+    if center then
+      if t.demo then self.text('DEMO',0,-188,8,rgba({159,184,200},opacity*0.45),nil,'center',nil,true,2)
+      elseif not t.physics then self.text('PHYSICS N/A',0,244,10,c.dim,nil,'center',nil,true) end
+    end
   end
   return self
 end
@@ -1084,10 +2466,19 @@ return M
 -- One schema for defaults, compatibility reads, range clamps and saving.
 local M={}
 M.schema={
+  drsEnabled={'DRS_CHIME_ENABLED',false}, drsTriggerMode={'DRS_TRIGGER_MODE','AUTO'}, drsVolume={'DRS_CHIME_VOLUME',0.65,0,1},
+  drsCooldown={'DRS_COOLDOWN_SECONDS',1.5,1.5,10},
+  drsMargin={'DRS_ACTIVATION_MARGIN_M',40,0,200},
+  drsFreeSeconds={'DRS_FREE_USE_SECONDS',2,0.5,10},
+  drsForceOn={'DRS_FORCE_ON',''}, drsForceOff={'DRS_FORCE_OFF',''},
+  debugMode={'DEBUG_MODE',false}, lockHUD={'LOCK_HUD_POSITION',false},
+  debugDRS={'DEBUG_DRS',false}, debugDRSActive={'DEBUG_DRS_ACTIVE_CHIME',false},
+  drsSound={'DRS_SOUND','drs_chime.wav',preserveCase=true},
   enabled={'ENABLED',true}, scale={'SCALE',1,0.5,1.5}, x={'X_OFFSET',0,-960,960},
   y={'Y_OFFSET',0,-540,540}, curve={'CURVE',1,0,1.6}, opacity={'OPACITY',0.95,0,1},
   leftScale={'LEFT_SCALE',1,0.5,1.5}, dialScale={'DIAL_SCALE',1,0.5,1.5},
   moduleScale={'MODULE_SCALE',1,0.5,1.5}, rightScale={'RIGHT_SCALE',1,0.5,1.5},
+  showLeft={'SHOW_LEFT_ZONE',true}, showCenter={'SHOW_CENTER_ZONE',true}, showRight={'SHOW_RIGHT_ZONE',true},
   outerArc={'OUTER_ARC',false}, aeroDuration={'AERO_ANIMATION_MS',420,150,1000},
   leaderboardDuration={'LEADERBOARD_ANIMATION_MS',450,200,900},
   gearDuration={'GEAR_ANIMATION_MS',260,150,600},
@@ -1115,8 +2506,27 @@ local function clean(v,d)
     if type(v)~='number' or v~=v or math.abs(v)==math.huge then v=d[2] end
     return math.max(d[3],math.min(d[4],v))
   end
-  return type(v)=='string' and v:upper() or v
+  return type(v)=='string' and not d.preserveCase and v:upper() or v
 end
+-- The old release kept dragMode in memory only. Honor an explicit legacy
+-- config key if an older or customized install did write one.
+local function legacyLock(ini)
+  if not ini or ini:get('HUD','LOCK_HUD_POSITION','')~='' then return nil end
+  for _,key in ipairs({'DRAG_HUD_WITH_MOUSE','DRAG_MODE'}) do
+    local raw=ini:get('HUD',key,''):match('^%s*(.-)%s*$'):upper()
+    if raw=='0' or raw=='FALSE' or raw=='OFF' or raw=='NO' then return true end
+    if raw=='1' or raw=='TRUE' or raw=='ON' or raw=='YES' then return false end
+  end
+end
+
+function M.diagnostics(c,result)
+  local debug=c.debugMode
+  result.drsLog=debug and c.debugDRS
+  result.activeCue=result.drsLog and c.debugDRSActive
+  result.forceDemo=debug and c.demo=='ON'
+  result.profile=debug and c.profileCPU
+end
+
 function M.read(ini)
   local c={}
   for k,d in pairs(M.schema) do
@@ -1124,6 +2534,9 @@ function M.read(ini)
     if ini then v=ini:get('HUD',d[1],d[2]) end
     c[k]=clean(v,d)
   end
+  local migratedLock=legacyLock(ini)
+  if migratedLock~=nil then c.lockHUD=migratedLock end
+  if c.drsTriggerMode~='SPLINE' then c.drsTriggerMode='AUTO' end
   c.strips=math.floor(c.strips)
   c.p2pActiveStatus=math.floor(c.p2pActiveStatus)
   c.carProfile={}
@@ -1133,7 +2546,7 @@ function M.read(ini)
     -- Metadata/path casing is significant: do not uppercase profile strings.
     c.carProfile[k]=type(d[2])=='string' and v or clean(v,d)
   end
-  return c
+  return c,migratedLock~=nil
 end
 function M.effective(c,id,car)
   local e={}; for k,v in pairs(c) do e[k]=v end
@@ -1167,6 +2580,13 @@ function M.save(path,c)
   ini:save(path)
 end
 return M
+
+````
+
+## apps/lua/HaloHUD/sounds/README.txt
+
+````text
+Place your own drs_chime.wav here, or add several WAV files and choose one in HaloHUD controls. Click Reload config.ini to rescan. WAV files in this folder are local to your installation.
 
 ````
 
@@ -1454,6 +2874,9 @@ PASS 1.9.0 (2026-11-12): approved horizontal gear highlight motion and 30% N/R p
 PASS 1.10.0 (2026-11-12): approved vertical leaderboard animation integrated into Lua. 64 offline tests pass, including row spring/reversal continuity, solo fade with previous opponent data retained, curved strip highlight alignment, duration auto-save and renderer resize persistence. Existing gear/aero, race-position, telemetry, scaling, input and config regressions pass. No new CSP APIs. Browser demo and Lua leaderboard contact sheet regenerated. In-game behavior and frame-time target remain pending. New leaderboard_motion.lua is required when upgrading.
 
 PASS 1.10.1: 71 offline tests pass. Reproduced no-motion behavior on ordinary rank changes with unchanged row layout. Added directional spring motion for rank changes, comparison-driver reveal and six-second demo-state transitions. Duration-normalized impulses keep motion subtle across timing settings. Existing P1/solo layout transitions and reversals remain covered. Live in-game verification remains pending.
+
+
+PASS 1.11.0: DRS chime checkpoints passed in the Lua 5.1 harness. The standalone zone-math script reported 13 passing cases. The full suite reported 83 tests passing, including zone checks, session resets, free-use classification and mocked audio and settings behavior. CSP 0.2.0 SDK declaration checks passed. The project ships a sounds-folder instruction file and uses WAV files supplied by the user. Native CSP audio format limits, camera audibility, AC Master gain routing and live cue timing remain pending. See TESTING.md for the manual plan.
 
 ````
 
@@ -3305,6 +4728,8 @@ EXCLUDED_DIRS={'.git','.venv','venv','__pycache__','.pytest_cache','.mypy_cache'
                '.vscode','.idea','htmlcov','dist','.release-tools'}
 def publishable(p):
     rel=p.relative_to(ROOT)
+    if rel.parts[:4]==('apps','lua','HaloHUD','sounds') and rel.parts[4:]!=('README.txt',):
+        return False
     return not any(part in EXCLUDED_DIRS for part in rel.parts) and not (
         p.name in {'.env','.coverage','.DS_Store','Thumbs.db','Desktop.ini'}
         or (p.name.startswith('.env.') and p.name!='.env.example')
@@ -4111,18 +5536,32 @@ class Harness:
           function vec2(x,y) return {x=x or 0,y=y or 0} end
           function rgbm(r,g,b,a) return {r=r,g=g,b=b,mult=a or 1} end
           local inWindow=false
+          controlWidth=520
           ui={
+            StyleColor={WindowBg=2,Text=0}, HoveredFlags={AnyWindow=4}, MouseCursor={ResizeAll=2},
+            childWindow=function(_,_,_,_,body) body() end,
+            tabBar=function(_,_,body) body() end,
+            tabItem=function(name,_,body) if not controlTab or name==controlTab then body() end end,
+            treeNode=function(name,_,body) if not openControlSections or openControlSections[name] then body() end end,
+            pushID=function(value) controlID=value end,popID=function() controlID=nil end,
+            itemHovered=function() return false end,setTooltip=function() end,
+            dummy=function() end,header=function() end,separator=function() end,sameLine=function() end,
+            availableSpaceX=function() return controlWidth end,measureText=function(s) return vec2(#s*8,16) end,
+            inputText=function(_,value) return value end,textDisabled=function() end,
+            setNextItemWidth=function() end,combo=function() end,selectable=function() return false end,
+            styleColor=function() return rgbm(.08,.1,.12,1) end,pushStyleColor=function() end,popStyleColor=function() end,
             beginTransparentWindow=function(id,pos,size,padding,inputs)
               assert(not inWindow, 'Unbalanced window')
-              assert(inputs==false or (inputs==true and id=='HaloHUD:dragHandle'))
+              assert(inputs==false, 'The overlay must stay click-through')
               inWindow=true
             end,
             endTransparentWindow=function() assert(inWindow); inWindow=false end,
             drawImageQuad=function(...) assert(inWindow); py_record(...) end,
             text=function() end, textWrapped=function() end,
-            invisibleButton=function() end, itemActive=function() return false end,
-            mouseDelta=function() return vec2() end, captureMouse=function() end,
-            drawRectFilled=function() end, setCursor=function() end,
+            windowHovered=function() return false end, mousePos=function() return vec2(-1,-1) end,
+            mouseClicked=function() return false end, mouseDoubleClicked=function() return false end,
+            mouseDown=function() return false end, mouseReleased=function() return false end,
+            captureMouse=function() end, setMouseCursor=function() end,
             checkbox=function() return false end, button=function() return false end,
             slider=function(_,v) return v end
           }
@@ -4130,14 +5569,17 @@ class Harness:
           ac={
             SessionType={Race=3},
             onRelease=function(callback) releaseCallback=callback end,
+            onSessionStart=function(callback) sessionStartCallback=callback end,
             INIConfig={load=function() return {
               get=function(_,s,k,d) return py_ini_get(s,k,d) end,
               set=function(_,s,k,v) py_ini_set(s,k,v) end,
               save=function(_,path) py_ini_save(path) end} end},
             getSim=function() return {carsCount=0,currentSessionIndex=0} end,
             getUI=function() return {windowSize=vec2(py_width,py_height)} end,
+            getAppWindows=function() return {} end,
             getCar=function() return nil end,
             getCarID=function() return 'generic_test_car' end,
+            getTrackFullID=function() return 'mock_track/layout' end,
             getSession=function() return nil end
           }
         ''')
@@ -4261,7 +5703,7 @@ class AeroAnimationTests(unittest.TestCase):
           ac.getSim=function() return {carsCount=1,currentSessionIndex=0} end
         ''')
         h.frame(1/60)
-        h.lua.execute("ui.slider=function(label,v) return label=='HUD scale' and 0.7 or v end")
+        h.lua.execute("ui.slider=function(label,v) return label=='##hudScale' and 70 or v end")
         h.lua.globals().script.windowMain();h.frame(1/60)
         self.assertTrue(0<phases[0]<phases[1]<1)
 
@@ -4338,6 +5780,650 @@ if __name__=='__main__':unittest.main()
 
 ````
 
+## tests/test_controls.py
+
+````python
+import unittest
+from headless import Harness
+
+
+class ControlsTests(unittest.TestCase):
+    def test_override_helpers_preserve_legacy_ids_and_match_case_insensitively(self):
+        Harness().lua.execute("""
+          local M=require('controls_model')
+          local rows,lookup=M.parseList('Car_one;CAR_ONE, Car_Two')
+          assert(#rows==2 and rows[1].name=='Car_one' and lookup.car_two)
+          assert(M.editList('Car_one;CAR_ONE, Car_Two',' car_one ',false)=='Car_one;CAR_ONE, Car_Two')
+          assert(M.editList('Car_one;CAR_ONE, Car_Two','car_one',true)=='Car_Two')
+          assert(M.editList('Car_one','BMW_M3',false)=='Car_one, BMW_M3')
+          assert(M.editList('Car_one','missing',true)=='Car_one')
+          local value,reason=M.editList('Car_one','two ids',false)
+          assert(not value and reason=='Enter one car folder ID.')
+        """)
+
+    def test_reset_uses_schema_defaults_and_only_selected_keys(self):
+        Harness().lua.execute("""
+          local M=require('controls_model');local S=require('settings')
+          local values={scale=1.4,drsVolume=.2,debugMode=true,debugDRS=true,drsForceOn='car_a',drsForceOff='car_b',
+            theme='AMBER',lockHUD=true}
+          local function set(key,value) values[key]=value end
+          M.reset('layout',S.schema,set)
+          assert(values.scale==1 and values.lockHUD and values.drsVolume==.2 and values.theme=='AMBER')
+          for section in pairs(M.sections) do
+            if section~='overrides' then M.reset(section,S.schema,set) end
+          end
+          assert(values.debugMode and values.lockHUD and values.drsForceOn=='car_a' and values.drsForceOff=='car_b')
+          assert(values.debugDRS==false and values.demo=='AUTO')
+          M.reset('overrides',S.schema,set)
+          assert(values.debugMode and values.lockHUD and values.drsForceOn=='' and values.drsForceOff=='')
+        """)
+
+    def test_all_suppression_messages_and_audio_error_details(self):
+        Harness().lua.execute("""
+          local M=require('controls_model')
+          for key,text in pairs(M.reasons) do
+            assert(M.skipped(key)=='Last skipped chime: '..text)
+          end
+          assert(M.skipped('started in zone')=='Last skipped chime: you started inside a zone.')
+          assert(M.skipped('AudioEvent:start failed: native details')=='Last skipped chime: CSP could not start playback.')
+          assert(M.skipped('unknown private details')=='Last skipped chime: the cue was skipped. See DRS debug logging for details.')
+        """)
+
+    def test_status_text_for_conflict_missing_sound_and_spline(self):
+        Harness().lua.execute("""
+          local M=require('controls_model');local s={}
+          M.status(s,'Ready','file',3,'car','unknown',false,false,'AUTO',nil)
+          assert(s.soundTone=='good' and s.trackText=='Track: 3 DRS zones loaded')
+          assert(s.carText=='Car ID: car' and s.modeText=='This car: not classified yet')
+          M.status(s,'WAV missing or unreadable',nil,0,'car','free_use',true,true,'SPLINE','override off')
+          assert(s.soundTone=='bad' and s.modeText=='This car: forced off')
+          assert(s.trackText:find('need track zone data',1,true) and s.skipped:find('force-off',1,true))
+          M.status(s,'Ready','file',nil,'car','no_drs',false,false,'AUTO',nil)
+          assert(s.modeText=='This car: no DRS support' and s.trackTone=='warn')
+        """)
+
+    def test_changed_status_only_reformats_when_input_changes(self):
+        Harness().lua.execute("""
+          local M=require('controls_model');local s={}
+          M.status(s,'Ready','file',3,'car','free_use',false,false,'AUTO','paused')
+          local render=M.skipped;local changes=0
+          M.skipped=function(...) changes=changes+1;return render(...) end
+          for i=1,20 do M.status(s,'Ready','file',3,'car','free_use',false,false,'AUTO','paused') end
+          assert(changes==0)
+          M.status(s,'Ready','file',3,'car','free_use',false,false,'AUTO','replay')
+          assert(changes==1)
+        """)
+
+    def test_controls_tabs_and_advanced_sections(self):
+        h=Harness(overrides={'DEBUG_MODE':1,'DEBUG_DRS':1});h.frame(.02)
+        h.lua.execute("""
+          tabs={};local tab=ui.tabItem
+          ui.tabItem=function(name,flags,body) tabs[#tabs+1]=name;tab(name,flags,body) end
+          controlTab='Advanced';openControlSections={}
+          toggles={};ui.checkbox=function(label) toggles[label]=true;return false end
+          script.windowMain()
+          assert(table.concat(tabs,',')=='General,HUD,DRS Chime,Advanced')
+          assert(not toggles['Force demo telemetry'] and not toggles['DRS debug logging'])
+          openControlSections.Diagnostics=true;script.windowMain()
+          assert(toggles['Force demo telemetry'] and toggles['DRS debug logging'] and toggles['Test cue when DRS opens'])
+        """)
+        self.assertEqual(h.ini['HUD']['DEBUG_DRS'],'1')
+
+    def test_live_override_edits_save_and_show_with_debug_mode(self):
+        h=Harness(demo='OFF',overrides={'DEBUG_MODE':1});h.lua.execute("""
+          player={index=0,physicsAvailable=true,drsPresent=true,driverName=function() return 'Player' end}
+          ac.getSim=function() return {carsCount=1,currentSessionIndex=0} end
+          ac.getCar=function() return player end
+          ac.getCarID=function() return 'player_car' end
+          controlTab='DRS Chime'
+          ac.getTrackDataFilename=function() return 'test_zones' end
+          io.load=function() return '[ZONE_0]\\nSTART=.2\\nEND=.4' end
+          texts={};ui.textWrapped=function(t) texts[t]=true end
+          ui.button=function(label) return label=='Add current car to force-on' or label=='Add current car to force-off' end
+        """)
+        h.frame(.02);g=h.lua.globals();g.script.windowMain();h.frame(.41)
+        self.assertEqual(h.ini['HUD']['DRS_FORCE_ON'],'PLAYER_CAR')
+        self.assertEqual(h.ini['HUD']['DRS_FORCE_OFF'],'PLAYER_CAR')
+        h.lua.execute("ui.button=function() return false end;script.windowMain()")
+        self.assertTrue(g.texts['This car: forced off'])
+        self.assertTrue(g.texts['Track: 1 DRS zone loaded'])
+        self.assertTrue(g.texts['Conflict: at least one car is in both lists. Force-off wins.'])
+        h.lua.execute("ui.button=function(label) return label=='Remove' end;script.windowMain()")
+        h.frame(.41)
+        self.assertEqual(h.ini['HUD']['DRS_FORCE_ON'],'')
+        self.assertEqual(h.ini['HUD']['DRS_FORCE_OFF'],'')
+
+    def test_diagnostics_settings_are_gated_without_mutation(self):
+        Harness().lua.execute('''
+          local S=require('settings')
+          local c=S.read(nil)
+          assert(c.debugMode==false and c.lockHUD==false)
+          c.debugDRS,c.debugDRSActive,c.profileCPU,c.demo=true,true,true,'ON'
+          local d={}
+          S.diagnostics(c,d)
+          assert(not d.drsLog and not d.activeCue and not d.profile and not d.forceDemo)
+          assert(c.debugDRS and c.debugDRSActive and c.profileCPU and c.demo=='ON')
+          c.debugMode=true
+          S.diagnostics(c,d)
+          assert(d.drsLog and d.activeCue and d.profile and d.forceDemo)
+          c.debugDRS=false
+          S.diagnostics(c,d)
+          assert(not d.drsLog and not d.activeCue and d.profile and d.forceDemo)
+        ''')
+ 
+    def test_debug_toggle_hides_controls_and_skips_hidden_status_work(self):
+        h=Harness(overrides={'DEBUG_DRS':1,'PROFILE_CPU':1})
+        h.lua.execute(r'''
+          local M=require('controls_model')
+          local status=M.status
+          statusCalls=0
+          M.status=function(...) statusCalls=statusCalls+1;return status(...) end
+          logCount=0;ac.log=function() logCount=logCount+1 end
+          controlTab='General'
+          toggleDebug=false
+          local toggles={}
+          ui.checkbox=function(label) toggles[label]=true;return label=='Debug Mode' and toggleDebug end
+          local headers,sections,texts,buttons,combos={},{},{},{},{}
+          ui.header=function(label) headers[label]=true end
+          ui.textWrapped=function(label) texts[label]=true end
+          local tree=ui.treeNode
+          ui.treeNode=function(name,...) sections[name]=true;tree(name,...) end
+          ui.button=function(label) buttons[label]=true;return false end
+          ui.combo=function(label) combos[label]=true end
+          script.update(.02)
+          script.windowMain();assert(toggles['Debug Mode'] and toggles['Lock HUD position'])
+          controlTab='DRS Chime'
+          script.windowMain()
+          assert(statusCalls==0 and not headers['Live status'] and not headers['Car overrides'])
+          assert(not buttons['Add current car to force-on'] and buttons['Test chime'] and buttons['Reset section'])
+          assert(combos['##drsSound'] and combos['##triggerMode'])
+          assert(texts['The selected sound could not play. Choose a readable WAV from the sounds folder.'])
+          controlTab='Advanced'
+          script.windowMain();assert(sections['DRS tuning'] and not sections.Diagnostics and not sections['Live telemetry'])
+          controlTab='General';toggleDebug=true;script.windowMain();toggleDebug=false
+          controlTab='DRS Chime';script.windowMain()
+          assert(statusCalls==1 and headers['Live status'] and headers['Car overrides'])
+          controlTab='Advanced';script.windowMain()
+          assert(sections.Diagnostics and sections['Live telemetry'] and toggles['DRS debug logging'])
+          assert(toggles['Force demo telemetry'] and toggles['Measure Lua CPU time'] and toggles['Test cue when DRS opens'])
+          controlTab='General';toggleDebug=true;script.windowMain();toggleDebug=false
+          local previous=logCount
+          script.update(.41)
+          controlTab='DRS Chime';script.windowMain()
+          assert(statusCalls==1 and logCount==previous)
+        ''')
+        self.assertEqual(h.ini['HUD']['DEBUG_MODE'],'0')
+        self.assertEqual(h.ini['HUD']['DEBUG_DRS'],'1')
+        self.assertEqual(h.ini['HUD']['PROFILE_CPU'],'1')
+
+    def test_narrow_controls_keep_positive_width_for_test_chime_row(self):
+        h=Harness();h.frame(.02)
+        h.lua.execute("""
+          controlWidth=280;controlTab='DRS Chime';testSeen=false
+          ui.setNextItemWidth=function(w) assert(w>0 and w<=controlWidth) end
+          ui.button=function(label) if label=='Test chime' then testSeen=true end;return false end
+          script.windowMain();assert(testSeen)
+        """)
+
+````
+
+## tests/test_drs_chime.py
+
+````python
+import unittest
+from headless import Harness, ROOT
+
+
+class DRSChimeTests(unittest.TestCase):
+    def test_plain_lua_suite(self):
+        h = Harness()
+        h.lua.execute((ROOT/'tests/test_drs_zone_math.lua').read_text(encoding='utf-8'))
+
+    def detector(self):
+        h = Harness()
+        h.lua.execute("""
+          D=require('drs_chime'); Z=require('drs_zones'); state=D.new()
+          cfg={drsCooldown=1.5,drsMargin=40,drsFreeSeconds=2}
+          car={drsPresent=true,drsAvailable=false,splinePosition=.18,speedKmh=180}
+          zones=Z.parse('[ZONE_0]\\nSTART=.2\\nEND=.22\\nDETECTION=.17\\n[ZONE_1]\\nSTART=.24\\nEND=.29')
+          function frame(pos, available, dt, override, id, sessionReady)
+            car.splinePosition=pos;car.drsAvailable=available
+            local fire,zone=D.update(state,car,id or 'car_folder',dt or .2,5000,zones,cfg,override,nil,sessionReady)
+            if fire then D.played(state,zone) end
+            return fire
+          end
+        """)
+        return h
+
+    def test_in_zone_edge_only_once_and_next_zone_rearms(self):
+        h = self.detector()
+        h.lua.execute("""
+          assert(#zones==2 and zones[1].detection==.17)
+          assert(not frame(.188,false));assert(not frame(.193,false));assert(not frame(.198,false))
+          assert(frame(.201,true));assert(state.classification=='zone_restricted')
+          for i=1,8 do assert(not frame(.211,false)) end
+          assert(not frame(.213,true));assert(state.reason=='already cued in zone')
+          for _,p in ipairs({.218,.223,.228,.233,.238}) do assert(not frame(p,false)) end
+          assert(frame(.243,true))
+        """)
+
+    def test_free_use_dwell_is_sticky_and_per_folder(self):
+        self.detector().lua.execute("""
+          assert(not frame(.184,false));assert(not frame(.184,true,.25))
+          for i=1,6 do assert(not frame(.184,true,.25));assert(state.classification=='unknown') end
+          assert(not frame(.184,true,.25));assert(state.classification=='free_use')
+          D.reset(state);assert(not frame(.196,false));assert(not frame(.201,true));assert(state.reason=='free-use car')
+          assert(not frame(.205,false));assert(not frame(.209,true,.2,'on'))
+          for i=1,6 do assert(not frame(.209,true,.25,'on')) end
+          for _,p in ipairs({.214,.219,.224,.229,.234,.239}) do assert(not frame(p,true,.2,'on')) end
+          assert(frame(.244,true,.2,'on'))
+          D.reset(state);state.lastPlayed=-math.huge
+          assert(not frame(.197,false,.2,nil,'other'))
+          assert(frame(.201,true,.2,nil,'other'));assert(state.classes.car_folder=='free_use')
+          D.session(state);assert(state.classes.car_folder==nil)
+        """)
+
+    def test_no_zones_first_clean_edge_and_guarded_pit_classification(self):
+        self.detector().lua.execute("""
+          zones={};assert(not frame(.1,true));assert(not frame(.102,false));assert(frame(.105,true))
+          D.session(state);car.isInPitlane=true
+          assert(not frame(.12,true,.25));assert(state.classification=='unknown')
+          for i=1,24 do assert(not frame(.12,true,.25));assert(state.classification=='unknown') end
+          for i=1,5 do assert(not frame(.12,true,.25)) end
+          assert(state.classification=='free_use')
+          D.session(state);car.isInPitlane=false;car.speedKmh=0
+          assert(not frame(.12,true));assert(state.classification=='unknown')
+          D.session(state);car.speedKmh=180;car.drsPresent=false
+          assert(not frame(.11,true,.2,'on'));assert(state.classification=='no_drs')
+        """)
+
+    def test_loading_inside_and_teleport_do_not_chime(self):
+        self.detector().lua.execute("""
+          assert(not frame(.204,false));assert(not frame(.206,true))
+          D.session(state);assert(not frame(.6,false));assert(not frame(.203,true))
+          assert(state.reason=='teleport');assert(not frame(.206,true))
+        """)
+
+    def test_layout_then_base_lookup_and_unreadable_fallback(self):
+        self.detector().lua.execute("""
+          ac.getTrackDataFilename=function() return 'layout/data/drs_zones.ini' end
+          ac.FolderID={Root=0};ac.getTrackID=function() return 'example' end
+          ac.getFolder=function() return 'root' end
+          io.load=function(path)
+            if path:find('^layout') then error('denied') end
+            assert(path=='root/content/tracks/example/data/drs_zones.ini')
+            return '[ZONE_0]\\nSTART=.9\\nEND=.1'
+          end
+          local data,path=Z.load();assert(#data==1 and path:find('^root/'))
+          io.load=function() return 'invalid INI' end
+          local missing,_,reason=Z.load();assert(#missing==0 and reason)
+        """)
+
+    def integration(self, **overrides):
+        options={'DRS_CHIME_ENABLED':1,'DEBUG_MODE':1,'DEBUG_DRS':1,**overrides}
+        h=Harness(demo='OFF',overrides=options)
+        h.lua.execute("""
+          starts,created,disposed,scans,reads,fileChecks=0,0,0,0,0,0
+          messages={}; ac.log=function(value) messages[#messages+1]=value end
+          sim={carsCount=1,currentSessionIndex=0,focusedCar=0,trackLengthM=5000}
+          car={index=0,physicsAvailable=true,drsPresent=true,drsAvailable=false,splinePosition=.18,
+            speedKmh=180,rpm=2000,gear=2,driverName=function() return 'Driver' end}
+          ac.getCar=function(index) assert(index==0);return car end
+          ac.getSim=function() return sim end
+          ac.getCarID=function() return 'car_folder' end
+          ac.getTrackDataFilename=function() return 'zones' end
+          io.load=function() reads=reads+1;return '[ZONE_0]\\nSTART=.2\\nEND=.4' end
+          io.scanDir=function() scans=scans+1;return {'Second.WAV','notes.txt','drs_chime.wav'} end
+          io.fileExists=function(path) fileChecks=fileChecks+1;return not missing end
+          ac.AudioEvent={fromFile=function(options,reverb)
+            assert(not options.loop and not options.use3D and not reverb)
+            created=created+1;file=options.filename
+            local consumed,released=false,false
+            return {isValid=function() return not consumed and not released and not invalid end,
+              isPlaying=function() return true end,
+              start=function(self)
+                assert(not consumed and not released,'one-shot was already consumed')
+                starts=starts+1;consumed=true;volume=self.volume;assert(self.cameraInteriorMultiplier==1)
+                return self
+              end,
+              dispose=function() assert(not released);released=true;disposed=disposed+1 end}
+
+          end}
+        """)
+        return h
+
+    def test_runtime_replay_pause_focus_and_override_off(self):
+        for suppression in ('isPaused','isReplayActive','isReplayOnlyMode','focusedCar','override'):
+            with self.subTest(suppression=suppression):
+                overrides={'DRS_FORCE_ON':'Car_Folder','DRS_FORCE_OFF':'car_folder'} if suppression=='override' else {}
+                h=self.integration(**overrides);h.lua.globals().car.splinePosition=.197;h.frame(.02)
+                if suppression=='focusedCar': h.lua.execute('sim.focusedCar=1')
+                elif suppression!='override': h.lua.execute(f'sim.{suppression}=true')
+                h.lua.execute('car.drsAvailable=true;car.splinePosition=.201');h.frame(.02)
+                self.assertEqual(h.lua.globals().starts,0)
+                if suppression=='focusedCar': h.lua.execute('sim.focusedCar=0')
+                elif suppression!='override': h.lua.execute(f'sim.{suppression}=false')
+                h.frame(.02);self.assertEqual(h.lua.globals().starts,0)
+
+    def test_runtime_missing_file_logs_once_and_keeps_drawing(self):
+        h=self.integration();h.lua.execute('missing=true')
+        self.assertTrue(h.frame(.02));h.lua.execute('car.drsAvailable=true;car.splinePosition=.201')
+        for _ in range(5): self.assertTrue(h.frame(.02))
+        g=h.lua.globals();self.assertEqual(g.starts,0);self.assertEqual(g.created,0)
+        self.assertEqual(len([m for m in g.messages.values() if 'WAV missing or unreadable (' in m]),1)
+        self.assertEqual(g.scans,1);self.assertEqual(g.reads,1)
+
+    def test_runtime_playback_and_selector_persist_with_case(self):
+        h=self.integration();h.frame(.02)
+        for p in (.184,.188,.192,.196,.199):
+            h.lua.globals().car.splinePosition=p;h.frame(.02)
+        h.lua.execute('car.drsAvailable=true;car.splinePosition=.201');h.frame(.02)
+        g=h.lua.globals();self.assertEqual(g.starts,1);self.assertEqual(g.created,1)
+        self.assertAlmostEqual(g.volume,.65)
+        h.lua.execute("""
+          ui.combo=function(_,_,_,content) content() end
+          ui.selectable=function(name) return name=='Second.WAV' end
+          script.windowMain()
+        """)
+        h.frame(.41)
+        self.assertEqual(g.created,1);self.assertEqual(g.disposed,1)
+        self.assertEqual(g.scans,1);self.assertEqual(h.ini['HUD']['DRS_SOUND'],'Second.WAV')
+        h.lua.execute("ui.button=function(label) return label=='Test chime' end;script.windowMain()")
+        self.assertEqual(g.created,2);self.assertTrue(g.file.endswith('/sounds/Second.WAV'))
+
+    def test_denied_entries_stay_quiet_and_cooldown_blocks_next_edge(self):
+        self.detector().lua.execute("""
+          for _,p in ipairs({.184,.19,.195,.2,.205,.21,.215,.22,.225,.23,.235,.24,.245}) do
+            assert(not frame(p,false))
+          end
+          assert(frame(.25,true));zones={};assert(not frame(.253,false))
+          assert(not frame(.256,true));assert(state.reason=='cooldown')
+        """)
+
+    def test_missing_zones_continuous_travel_marks_free_use(self):
+        self.detector().lua.execute("""
+          zones={};assert(not frame(.1,true,.25))
+          for i=1,50 do assert(not frame(.1+.007*i,true,.25)) end
+          assert(state.classification=='free_use')
+          assert(not frame(.454,false,.25));assert(not frame(.458,true,.25))
+        """)
+
+    def test_restart_resets_first_sample_even_with_same_session_index(self):
+        h=self.integration();h.lua.globals().car.splinePosition=.197;h.frame(.02)
+        h.lua.execute('sessionStartCallback(0,true);car.splinePosition=.201;car.drsAvailable=true')
+        h.frame(.02)
+        self.assertEqual(h.lua.globals().starts,0)
+        self.assertEqual(h.lua.globals().reads,2)
+
+    def test_debug_button_bypasses_replay_enable_and_hidden_hud(self):
+        h=self.integration(DRS_CHIME_ENABLED=0, ENABLED=0, DRS_CHIME_VOLUME=0)
+        h.lua.execute("""
+          sim.isReplayActive=true;sim.isPaused=true;car.drsPresent=false
+          io.fileSize=function() return 8054 end
+          ui.button=function(label) return label=='Test chime' end
+        """)
+        h.frame(.02)
+        h.lua.globals().script.windowMain()
+        h.frame(.02)
+        g=h.lua.globals()
+        self.assertEqual(g.starts,1);self.assertEqual(g.disposed,0)
+        self.assertAlmostEqual(g.volume,.65)
+        log='\n'.join(g.messages.values())
+        for detail in ('enabled=false','Resolved WAV path:', 'io.fileExists pcall=true returned=true',
+                       'io.fileSize (bytes) pcall=true returned=8054','use3D=false, loop=false',
+                       'AudioEvent.volume assignment/readback', 'AudioEvent:start pcall=true'):
+            self.assertIn(detail,log)
+
+    def test_live_trigger_uses_update_with_no_hud_draw(self):
+        h=self.integration(ENABLED=0);g=h.lua.globals()
+        g.car.splinePosition=.197;g.script.update(.02)
+        g.car.splinePosition=.201;g.car.drsAvailable=True;g.script.update(.02)
+        self.assertEqual(g.starts,1)
+        self.assertIn('chime fired | playback=true','\n'.join(g.messages.values()))
+
+    def test_wav_header_and_pcall_failure_details(self):
+        h=self.integration();h.lua.execute(r"""
+          local A=require('drs_audio')
+          local fmt=string.char(1,0,1,0,68,172,0,0,136,88,1,0,2,0,16,0)
+          local header='RIFF'..string.char(38,0,0,0)..'WAVEJUNK'..string.char(1,0,0,0)..'x'..string.char(0)
+            ..'fmt '..string.char(16,0,0,0)..fmt
+          local info=A.wavHeader(header)
+          assert(info:find('sampleRate=44100 Hz bitDepth=16 channels=1',1,true))
+          io.fileSize=function() return #header end
+          io.load=function() return header end
+          ac.AudioEvent.fromFile=function() error('native loader error') end
+          ui.button=function(label) return label=='Test chime' end
+        """)
+        h.lua.globals().script.update(.02)
+        h.lua.globals().script.windowMain()
+        log='\n'.join(h.lua.globals().messages.values())
+        self.assertEqual(log.count('WAV header: format='),1)
+        self.assertIn('ac.AudioEvent.fromFile pcall=false error=',log)
+        self.assertIn('native loader error',log)
+        self.assertIn('Test chime | playback=false',log)
+
+    def test_repeated_test_clicks_create_fresh_events_without_file_checks(self):
+        h=self.integration(DRS_CHIME_ENABLED=0)
+        h.lua.execute("io.fileSize=function() return 52 end;ui.button=function(label) return label=='Test chime' end")
+        h.frame(.02)
+        g=h.lua.globals()
+        checks,reads=g.fileChecks,g.reads
+        for i in range(12):
+            g.script.windowMain()
+            if i%2==0: g.script.update(.02)
+            self.assertEqual(g.starts,i+1)
+            self.assertEqual(g.created,i+1)
+            self.assertEqual(g.disposed,i)
+        self.assertEqual((g.fileChecks,g.reads),(checks,reads))
+        self.assertNotIn('WAV could not be loaded','\n'.join(g.messages.values()))
+        g.releaseCallback()
+        self.assertEqual(g.disposed,12)
+
+    def test_two_real_zone_entries_create_fresh_events_with_diagnostics(self):
+        h=self.integration(ENABLED=0);g=h.lua.globals()
+        h.lua.execute(r"""io.load=function()
+          return '[ZONE_0]\nSTART=.2\nEND=.22\n[ZONE_1]\nSTART=.28\nEND=.32'
+        end""")
+        g.car.splinePosition=.197;g.script.update(.25)
+        g.car.splinePosition=.201;g.car.drsAvailable=True;g.script.update(.25)
+        g.car.drsAvailable=False
+        for step in range(1,20):
+            g.car.splinePosition=.201+.004*step;g.script.update(.25)
+        g.car.splinePosition=.281;g.car.drsAvailable=True;g.script.update(.25)
+        self.assertEqual((g.created,g.starts,g.disposed),(2,2,1))
+        log='\n'.join(g.messages.values())
+        self.assertEqual(log.count('chime fired | playback=true | fresh valid=true | start succeeded=true'),2)
+        self.assertIn('classification: zone_restricted',log)
+        self.assertIn('in-zone=1',log)
+        self.assertIn('suppression: DRS unavailable in zone',log)
+
+    def test_live_debug_heartbeat_and_immediate_edges_with_hud_disabled(self):
+        h=self.integration(ENABLED=0);g=h.lua.globals()
+        h.lua.execute('now=0;os.preciseClock=function() return now end;car.splinePosition=.201')
+        g.script.update(.02)
+        g.now=.2;g.car.drsAvailable=True;g.car.drsActive=True;g.script.update(.02)
+        log='\n'.join(g.messages.values())
+        self.assertEqual(log.count('state | car='),1)
+        self.assertIn('drsAvailable false -> true | splinePosition=0.201 | in-zone=0',log)
+        self.assertIn('drsActive nil -> true | splinePosition=0.201 | in-zone=0',log)
+        g.now=1.01;g.sim.isPaused=True;g.script.update(.02)
+        log='\n'.join(g.messages.values())
+        self.assertEqual(log.count('state | car='),2)
+        self.assertIn('replay=false | paused=true | trigger mode=DRS availability (auto) | last suppression=paused',log)
+
+    def test_active_edge_diagnostic_bypasses_free_use_and_zone_gate(self):
+        h=self.integration(ENABLED=0, DEBUG_DRS_ACTIVE_CHIME=1);g=h.lua.globals()
+        g.car.drsAvailable=True;g.car.speedKmh=180;g.car.drsActive=False
+        for _ in range(9): g.script.update(.25)
+        g.car.drsActive=True;g.script.update(.02)
+        g.script.update(.02)
+        self.assertEqual(g.starts,1)
+        log='\n'.join(g.messages.values())
+        self.assertIn('unknown -> free_use (sustained availability away from known zones)',log)
+        self.assertIn('drsActive false -> true',log)
+        self.assertIn('trigger=debug drsActive',log)
+        g.car.drsActive=False;g.script.update(.02)
+        g.sim.isReplayActive=True;g.car.drsActive=True;g.script.update(.02)
+        self.assertEqual(g.starts,1)
+
+    def test_las_vegas_jump_limit_handles_driving_and_timing_line(self):
+        h=self.integration();g=h.lua.globals()
+        h.lua.execute(r"""io.load=function()
+          return '[ZONE_0]\nSTART=.876445\nEND=.0221685\n[ZONE_1]\nSTART=.124952\nEND=.255582\n[ZONE_2]\nSTART=.621411\nEND=.823163'
+        end""")
+        g.sim.trackLengthM=6200;g.car.speedKmh=360
+        for pos in (.995,.997,.999,.001,.003,.005):
+            g.car.splinePosition=pos;g.script.update(.124)
+        log='\n'.join(g.messages.values())
+        self.assertNotIn('state reset: teleport',log)
+        self.assertIn('in-zone=0',log)
+        g.car.splinePosition=.5;g.script.update(.016)
+        log='\n'.join(g.messages.values())
+        self.assertIn('state reset: teleport | splinePosition=0.500000 | spline delta=+0.495000',log)
+        self.assertIn('raw delta=+0.495000 | limit=0.004032',log)
+
+    def test_startup_grid_and_stops_in_zone_do_not_poison_auto(self):
+        self.detector().lua.execute("""
+          car.speedKmh=0
+          for i=1,60 do assert(not frame(.18,true,.25,nil,nil,false)) end
+          for i=1,60 do assert(not frame(.18,true,.25)) end
+          assert(state.classification=='unknown')
+          car.speedKmh=180
+          assert(not frame(.185,false,.25));assert(not frame(.191,false,.25));assert(not frame(.197,false,.25))
+          assert(frame(.201,true,.25));assert(state.classification=='zone_restricted')
+          car.speedKmh=0
+          for i=1,60 do assert(not frame(.201,true,.25)) end
+          assert(state.classification=='zone_restricted')
+        """)
+
+    def test_stationary_evidence_after_driving_and_reset_grace(self):
+        self.detector().lua.execute("""
+          assert(not frame(.175,false,.25));assert(not frame(.18,false,.25))
+          car.speedKmh=0
+          for i=1,23 do assert(not frame(.18,true,.25));assert(state.classification=='unknown') end
+          for i=1,8 do assert(not frame(.18,true,.25)) end
+          assert(state.classification=='free_use')
+          D.reset(state);assert(not frame(.18,false,.25));assert(state.classification=='free_use')
+        """)
+
+    def test_spline_requires_forward_start_crossing_and_wraps(self):
+        self.detector().lua.execute("""
+          cfg.drsTriggerMode='SPLINE';zones={{start=.998,finish=.03}}
+          assert(not frame(.995,true,.25));assert(not frame(.997,true,.25))
+          assert(frame(.001,true,.25));assert(not frame(.005,false,.25))
+          D.session(state);state.lastPlayed=-math.huge
+          assert(not frame(.020,false,.25));assert(not frame(.016,false,.25));assert(not frame(.012,true,.25))
+          assert(state.reason=='started in zone')
+          D.session(state);assert(not frame(.4,false,.25));assert(not frame(.001,false,.25));assert(state.reason=='teleport')
+        """)
+
+    def test_force_on_plays_spline_with_flat_availability_and_force_off_wins(self):
+        for force_off in ('','car_folder'):
+            with self.subTest(force_off=force_off):
+                h=self.integration(DRS_FORCE_ON='car_folder',DRS_FORCE_OFF=force_off);g=h.lua.globals()
+                g.car.splinePosition=.197;g.script.update(.25)
+                g.car.splinePosition=.201;g.script.update(.25)
+                self.assertEqual(g.starts,0 if force_off else 1)
+                if not force_off:
+                    self.assertIn('trigger=spline START','\n'.join(g.messages.values()))
+
+    def test_debug_off_keeps_force_on_and_test_sound_but_stops_diagnostics(self):
+        h=self.integration(DEBUG_MODE=0,ENABLED=0,
+                           DRS_FORCE_ON='car_folder',DEBUG_DRS_ACTIVE_CHIME=1,DRS_CHIME_VOLUME=0)
+        g=h.lua.globals()
+        g.car.splinePosition=.19;g.car.drsActive=False;g.script.update(.25)
+        g.car.drsActive=True;g.script.update(.25)
+        self.assertEqual(g.starts,0)  # Hidden active-edge diagnostic is disabled.
+        h.lua.execute("controlTab='DRS Chime';ui.button=function(label) return label=='Test chime' end")
+        g.script.windowMain()
+        self.assertEqual(g.starts,1)
+        self.assertEqual(g.volume,.65)
+        h.lua.execute("ui.button=function() return false end")
+        # Restore positive gameplay volume through the same controls path.
+        h.lua.execute("controlTab='DRS Chime';ui.slider=function(id,v) if id=='##chimeVolume' then return 65 end;return v end")
+        g.script.windowMain()
+        g.car.splinePosition=.197;g.script.update(.25)
+        g.car.splinePosition=.201;g.script.update(.25)
+        self.assertEqual(g.starts,2)  # Spline cue, flat availability, no controls draw.
+        self.assertEqual(list(g.messages.values()),[])
+        g.script.update(.41)
+        self.assertEqual(h.ini['HUD']['DEBUG_DRS_ACTIVE_CHIME'],'1')
+        self.assertEqual(h.ini['HUD']['DEBUG_DRS'],'1')
+
+    def test_fresh_event_gain_is_restored_if_native_start_resets_it(self):
+        h=self.integration();g=h.lua.globals()
+        h.lua.execute("""
+          ac.AudioEvent.fromFile=function()
+            event={isValid=function() return true end,isPlaying=function() return true end,dispose=function() end}
+            event.start=function(self)
+              assert(self==event and self.volume==.65 and self.cameraInteriorMultiplier==1)
+              self.volume=.25;self.cameraInteriorMultiplier=.25
+              return self
+            end
+            return event
+          end
+          ui.button=function(label) return label=='Test chime' end
+        """)
+        g.script.update(.02);g.script.windowMain()
+        self.assertAlmostEqual(g.event.volume,.65)
+        self.assertEqual(g.event.cameraInteriorMultiplier,1)
+        self.assertIn('requested=0.65 | pre-start=0.65 | post-start=0.25','\n'.join(g.messages.values()))
+
+    def test_trigger_selector_saves_mode_and_explains_force_on(self):
+        h=self.integration();g=h.lua.globals();g.script.update(.02)
+        h.lua.execute("""
+          controlTab='DRS Chime'
+          ui.combo=function(label,_,_,children) if label=='##triggerMode' then children() end end
+          ui.selectable=function(label) return label=='When I cross a zone line' end
+          ui.itemHovered=function() return true end
+          ui.setTooltip=function(value) if value:find("Force-on",1,true) then tooltip=value end end
+          script.windowMain()
+        """)
+        g.script.update(.41)
+        self.assertEqual(h.ini['HUD']['DRS_TRIGGER_MODE'],'SPLINE')
+        self.assertIn('skipping the availability edge and free-use classification',g.tooltip)
+        # Drive to the activation line inside the normal spline jump threshold.
+        for pos in (.184,.188,.192,.196,.199,.201):
+            g.car.splinePosition=pos;g.script.update(.02)
+        self.assertEqual(g.starts,1)
+
+````
+
+## tests/test_drs_zone_math.lua
+
+````lua
+-- From the project root: lua tests/test_drs_zone_math.lua
+package.path='apps/lua/HaloHUD/?.lua;'..package.path
+local M=require('drs_zone_math')
+local cases={
+  {'normal inside',.4,.3,.6,true},
+  {'normal before',.29,.3,.6,false},
+  {'normal after',.61,.3,.6,false},
+  {'normal START inclusive',.3,.3,.6,true},
+  {'normal END inclusive',.6,.3,.6,true},
+  {'wrap before finish line',.98,.9,.12,true},
+  {'wrap after start line',.04,.9,.12,true},
+  {'wrap excludes mid-lap',.5,.9,.12,false},
+  {'wrap START inclusive',.9,.9,.12,true},
+  {'wrap END inclusive',.12,.9,.12,true},
+  {'wrap zero inclusive',0,.9,.12,true},
+  {'wrap one inclusive',1,.9,.12,true}
+}
+for _,case in ipairs(cases) do
+  assert(M.isInsideZone(case[2],case[3],case[4])==case[5],case[1])
+  print('PASS: '..case[1])
+end
+local z={{start=.3,finish=.6}}
+local activation,boundary=M.find(z,.293,40/5000)
+assert(activation==1 and boundary==1)
+activation,boundary=M.find(z,.607,40/5000)
+assert(activation==nil and boundary==1)
+assert(M.find(z,.293,40/10000)==nil)
+print('PASS: meter-based activation margin and exit-boundary distinction')
+print('13 DRS zone math cases passed')
+
+````
+
 ## tests/test_gear_motion.py
 
 ````python
@@ -4400,7 +6486,7 @@ class GearMotionTests(unittest.TestCase):
 
     def test_duration_control_auto_saves(self):
         h=Harness();h.frame(0)
-        h.lua.execute("ui.slider=function(label,v) return label=='Gear animation' and 400 or v end;script.windowMain()")
+        h.lua.execute("ui.slider=function(label,v) return label=='##gearDuration' and 0.4 or v end;script.windowMain()")
         h.frame(.41)
         self.assertEqual(float(h.ini['HUD']['GEAR_ANIMATION_MS']),400)
 
@@ -4618,7 +6704,7 @@ class LeaderboardMotionTests(unittest.TestCase):
 
     def test_duration_control_auto_saves(self):
         h=Harness();h.frame(0)
-        h.lua.execute("ui.slider=function(label,v) return label=='Leaderboard animation' and 650 or v end;script.windowMain()")
+        h.lua.execute("ui.slider=function(label,v) return label=='##leaderboardDuration' and 0.65 or v end;script.windowMain()")
         h.frame(.41)
         self.assertEqual(float(h.ini['HUD']['LEADERBOARD_ANIMATION_MS']),650)
 
@@ -4683,81 +6769,168 @@ class LeaderboardMotionTests(unittest.TestCase):
 import unittest
 from headless import Harness
 
+
 class MouseDragTests(unittest.TestCase):
     def setup_drag(self, **kwargs):
         h=Harness(**kwargs)
         h.lua.execute('''
-          windows={}; captures=0; held=false; dx=0; dy=0
+          windows={}; captures=0; hoverCues=0
+          px,py=-1,-1
           local begin=ui.beginTransparentWindow
           ui.beginTransparentWindow=function(id,p,s,pad,inputs)
-            windows[#windows+1]={id=id,inputs=inputs}; begin(id,p,s,pad,inputs)
+            windows[#windows+1]={id=id,inputs=inputs};begin(id,p,s,pad,inputs)
           end
-          ui.itemActive=function() return held end
-          ui.mouseDelta=function() return vec2(dx,dy) end
+          ui.mousePos=function() return vec2(px,py) end
+          ui.mouseClicked=function() return clicked==true end
+          ui.mouseDoubleClicked=function() return doubleClicked==true end
+          ui.mouseDown=function() return down==true end
+          ui.mouseReleased=function() return released==true end
           ui.captureMouse=function() captures=captures+1 end
-          local R=require('renderer'); local new=R.new
-          R.new=function(...) local r=new(...); dragInfo=r.drag; return r end
+          ui.setMouseCursor=function(cursor)
+            assert(cursor==ui.MouseCursor.ResizeAll);hoverCues=hoverCues+1
+          end
+          ui.windowHovered=function(flags)
+            assert(flags==ui.HoveredFlags.AnyWindow);return otherWindow==true
+          end
+          local R=require('renderer');local new=R.new
+          R.new=function(...) local r=new(...);dragInfo=r.drag;return r end
+          hudUI=ac.getUI();ac.getUI=function() return hudUI end
         ''')
         h.frame(0)
         return h
 
-    def toggle(self,h):
-        h.lua.execute('''
-          ui.checkbox=function(label) return label=='Drag HUD with mouse' end
-          script.windowMain()
-          ui.checkbox=function() return false end
+    def pointer(self,h,dx=0,dy=0,*,down=False,click=False,double=False,release=False):
+        g=h.lua.globals()
+        g.px,g.py=g.originX+dx,g.originY+dy
+        g.down,g.clicked,g.doubleClicked,g.released=down,click,double,release
+        h.frame(0)
+
+    def set_origin(self,h,side=.5,height=.5):
+        g=h.lua.globals();b=g.dragInfo
+        g.originX,g.originY=b.left+(b.right-b.left)*side,b.top+(b.bottom-b.top)*height
+
+    def test_pure_drag_math_converts_delta_and_clamps(self):
+        Harness().lua.execute('''
+          local D=require('hud_drag')
+          local b={minX=-20,maxX=80,minY=-50,maxY=25,scale=.5}
+          assert(D.contains(15,24,15,16,45,40))
+          assert(not D.contains(14,24,15,16,45,40))
+          local x,y=D.offset(b,5,-10,8,-4);assert(x==21 and y==-18)
+          x,y=D.offset(b,5,-10,500,-500);assert(x==80 and y==-50)
+          x,y=D.offset(b,5,-10,-500,500);assert(x==-20 and y==25)
         ''')
 
-    def test_temporary_mode_only_handle_accepts_input(self):
-        h=self.setup_drag(); self.assertEqual(len(h.lua.globals().windows),1)
-        self.toggle(h); h.frame(0)
-        self.assertEqual(h.lua.globals().windows[3].id,'HaloHUD:dragHandle')
-        self.assertTrue(h.lua.globals().windows[3].inputs)
-        self.toggle(h); h.lua.execute('windows={}')
-        h.frame(0); self.assertEqual(len(h.lua.globals().windows),1)
-        self.assertFalse(h.lua.globals().windows[1].inputs)
-        self.assertEqual(h.saves,0)
+    def test_migrates_only_explicit_legacy_key_and_persists_once(self):
+        for legacy,locked in (('0','1'),('False','1'),('ON','0'),('',None),('typo',None)):
+            with self.subTest(legacy=legacy):
+                h=Harness(overrides={'DRAG_HUD_WITH_MOUSE':legacy,'X_OFFSET':23})
+                del h.ini['HUD']['LOCK_HUD_POSITION']
+                h.frame(.41)
+                self.assertEqual(h.ini['HUD'].get('LOCK_HUD_POSITION'),locked)
+                self.assertEqual(h.saves,int(locked is not None))
+                h.lua.execute("ui.button=function(label) return label=='Reload config.ini' end;script.windowMain()")
+                h.frame(.41)
+                self.assertEqual(h.saves,int(locked is not None))
+                self.assertEqual(float(h.ini['HUD']['X_OFFSET']),23)
+                self.assertEqual(h.ini['HUD']['DRAG_HUD_WITH_MOUSE'],legacy)
+        h=Harness(overrides={'DRAG_MODE':'false','LOCK_HUD_POSITION':'0'})
+        h.frame(.41)
+        self.assertEqual(h.saves,0)  # Explicit new setting takes precedence.
 
-    def test_fitted_scale_motion_and_autosave(self):
-        for width,height,scale in ((1920,1080,1),(1280,720,.5),(2560,1440,1.5)):
+    def test_body_drag_at_multiple_scales_only_saves_after_release(self):
+        for width,height,scale,curve,side in ((1920,1080,1,1,.25),(1280,720,.5,0,.5),(2560,1440,1.5,1.6,.75)):
             with self.subTest(width=width,scale=scale):
-                h=self.setup_drag(width=width,height=height,overrides={'SCALE':scale})
-                self.toggle(h); info=h.lua.globals().dragInfo
-                x,y,s=info.x,info.y,info.scale
-                h.lua.execute('held=true;dx=20;dy=12'); h.frame(0)
-                self.assertEqual(h.saves,0) # initial click must not jump
-                h.frame(0); h.frame(0) # rebuild, following stationary frame below
-                # Two movement frames have now applied.
-                h.lua.execute('dx=0;dy=0;held=false'); h.frame(.41)
+                h=self.setup_drag(width=width,height=height,overrides={'SCALE':scale,'CURVE':curve})
+                self.set_origin(h,side)
+                g=h.lua.globals();b=g.dragInfo
+                self.pointer(h)
+                self.assertEqual(g.hoverCues,1)
+                self.pointer(h,down=True,click=True)
+                self.assertEqual((g.dragInfo.x,g.dragInfo.y),(b.x,b.y))
+                self.pointer(h,20,12,down=True)
+                self.assertGreater(g.captures,1)
+                self.assertTrue(all(not w.inputs and w.id=='HaloHUD:overlay' for w in g.windows.values()))
+                h.frame(.41)
+                self.assertEqual(h.saves,0)
+                self.pointer(h,20,12,release=True)
+                h.frame(.3)
+                self.assertEqual(h.saves,0)
+                h.frame(.12)
                 self.assertEqual(h.saves,1)
-                expected_x=min(info.maxX,max(info.minX,x+40/s))
-                expected_y=min(info.maxY,max(info.minY,y+24/s))
-                self.assertAlmostEqual(float(h.ini['HUD']['X_OFFSET']),expected_x)
-                self.assertAlmostEqual(float(h.ini['HUD']['Y_OFFSET']),expected_y)
+                self.assertAlmostEqual(float(h.ini['HUD']['X_OFFSET']),min(b.maxX,max(b.minX,b.x+20/b.scale)))
+                self.assertAlmostEqual(float(h.ini['HUD']['Y_OFFSET']),min(b.maxY,max(b.minY,b.y+12/b.scale)))
+                h.frame(1)
+                self.assertEqual(h.saves,1)
 
-    def test_edge_drag_reverses_without_dead_zone(self):
-        h=self.setup_drag(overrides={'X_OFFSET':960,'Y_OFFSET':540})
-        self.toggle(h); h.lua.execute('held=true'); h.frame(0)
-        self.assertEqual(h.saves,0)
-        h.lua.execute('dx=10000;dy=10000'); h.frame(0); h.frame(0)
-        info=h.lua.globals().dragInfo
-        self.assertAlmostEqual(info.x,info.maxX)
-        self.assertAlmostEqual(info.y,info.maxY)
-        h.lua.execute('dx=-12;dy=-8'); h.frame(0)
-        h.lua.execute('dx=0;dy=0;held=false'); h.frame(.41)
-        self.assertAlmostEqual(float(h.ini['HUD']['X_OFFSET']),info.maxX-12/info.scale)
-        self.assertAlmostEqual(float(h.ini['HUD']['Y_OFFSET']),info.maxY-8/info.scale)
+    def test_outside_or_other_window_press_never_steals_a_drag(self):
+        for blocker in ('outside','imgui','capture','legacy app'):
+            with self.subTest(blocker=blocker):
+                h=self.setup_drag();g=h.lua.globals()
+                self.set_origin(h)
+                if blocker=='imgui': g.otherWindow=True
+                elif blocker=='capture': g.hudUI.wantCaptureMouse=True
+                elif blocker=='legacy app':
+                    h.lua.execute('ac.getAppWindows=function() return {{visible=true,layer=0,position=vec2(originX-10,originY-10),size=vec2(20,20)}} end')
+                self.pointer(h,0 if blocker!='outside' else -g.originX,down=True,click=True)
+                g.otherWindow=False
+                g.hudUI.wantCaptureMouse=False
+                h.lua.execute('ac.getAppWindows=function() return {} end')
+                self.pointer(h,15,15,down=True)
+                self.pointer(h,15,15,release=True)
+                h.frame(.41)
+                self.assertEqual(g.captures,0)
+                self.assertEqual(h.saves,0)
 
-    def test_hidden_resets_drag_and_reset_exits_edit_mode(self):
-        h=self.setup_drag(); self.toggle(h)
-        h.lua.execute('hudUI=ac.getUI(); ac.getUI=function() return hudUI end;held=true')
-        h.frame(0)
-        h.lua.execute('hudUI.appsHidden=true;windows={};dx=40'); h.frame(0)
-        self.assertEqual(len(h.lua.globals().windows),0)
-        h.lua.execute('hudUI.appsHidden=false'); h.frame(0)
-        self.assertEqual(h.saves,0)
-        h.lua.execute('ui.button=function(label) return label=="Reset to defaults" end;script.windowMain();windows={}')
-        h.frame(0); self.assertEqual(len(h.lua.globals().windows),1)
+    def test_drag_clamps_and_follows_pointer_back_to_start(self):
+        h=self.setup_drag();g=h.lua.globals();b=g.dragInfo
+        self.set_origin(h)
+        self.pointer(h,down=True,click=True)
+        self.pointer(h,10000,10000,down=True)
+        self.assertAlmostEqual(g.dragInfo.x,b.maxX)
+        self.assertAlmostEqual(g.dragInfo.y,b.maxY)
+        self.assertGreaterEqual(g.dragInfo.left,16-1e-8)
+        self.assertLessEqual(g.dragInfo.right,h.width-16+1e-8)
+        self.pointer(h,0,0,down=True)
+        self.assertAlmostEqual(g.dragInfo.x,b.x)
+        self.assertAlmostEqual(g.dragInfo.y,b.y)
+
+    def test_lock_disables_drag_and_double_click_reset(self):
+        h=self.setup_drag(overrides={'LOCK_HUD_POSITION':1,'X_OFFSET':30,'Y_OFFSET':25})
+        g=h.lua.globals()
+        self.set_origin(h)
+        self.pointer(h,down=True,click=True)
+        self.pointer(h,10,12,down=True)
+        self.pointer(h,release=True)
+        self.pointer(h,down=True,double=True)
+        self.pointer(h,release=True)
+        h.frame(.41)
+        self.assertEqual((h.saves,g.captures,g.hoverCues),(0,0,0))
+        h.lua.execute("controlTab='General';ui.checkbox=function(label) return label=='Lock HUD position' end;script.windowMain()")
+        self.pointer(h,down=True,click=True)
+        self.pointer(h,release=True)
+        self.pointer(h,down=True,double=True)
+        self.pointer(h,release=True)
+        h.frame(.41)
+        saved=h.ini['HUD']
+        self.assertEqual(float(saved['X_OFFSET']),0)
+        self.assertEqual(float(saved['Y_OFFSET']),0)
+        self.assertEqual(saved['LOCK_HUD_POSITION'],'0')
+
+    def test_hiding_during_drag_commits_position_and_releases_capture(self):
+        h=self.setup_drag();g=h.lua.globals()
+        self.set_origin(h)
+        self.pointer(h,down=True,click=True)
+        self.pointer(h,16,4,down=True)
+        g.hudUI.appsHidden=True
+        g.script.update(.41)
+        self.assertEqual(h.saves,1)
+        self.assertEqual(float(h.ini['HUD']['X_OFFSET']),16)
+        captures=g.captures
+        self.assertFalse(h.frame(0))
+        g.hudUI.appsHidden=False
+        self.pointer(h,30,40,down=True)
+        self.assertEqual(g.captures,captures)
+
 
 if __name__=='__main__': unittest.main()
 
@@ -4802,7 +6975,7 @@ class RacePositionTests(unittest.TestCase):
         ''')
 
     def test_app_ignores_player_first_board_in_bot_race(self):
-        h=Harness(demo='AUTO');messages=[]
+        h=Harness(demo='AUTO',overrides={'DEBUG_MODE':1});messages=[]
         h.lua.globals().recordText=messages.append
         h.lua.execute('''
           player={index=0,racePosition=3,driverName=function() return 'Player Test' end}
@@ -4811,7 +6984,8 @@ class RacePositionTests(unittest.TestCase):
           ac.getSim=function() return {carsCount=3,currentSessionIndex=0,raceSessionType=3} end
           ac.getSession=function() return {type=3,leaderboard={[0]={car=player}}} end
           ac.getCar=function(i) return ({[0]=player,[1]=leader,[2]=ahead})[i] end
-          ui.text=recordText
+          controlTab='Advanced';openControlSections={['Live telemetry']=true}
+          ui.textWrapped=recordText
         ''')
         h.frame(0.25);h.lua.globals().script.windowMain()
         self.assertIn('Position 3 | Ahead 2 AHEAD',messages)
@@ -4963,7 +7137,7 @@ class LayoutTests(unittest.TestCase):
     def test_live_sliders_save_reset_and_other_options(self):
         h=Harness(overrides={'UNITS':'MPH','THEME':'AMBER','ENABLED':1})
         old=h.frame()
-        h.lua.execute("ui.slider=function(label,v) if label=='HUD scale' then return 0.7 elseif label=='Center dial scale' then return 1.3 end return v end")
+        h.lua.execute("ui.slider=function(label,v) if label=='##hudScale' then return 70 elseif label=='##dialScale' then return 130 end return v end")
         h.lua.globals().script.windowMain()
         self.assertNotEqual(old,h.frame())
         h.lua.execute("ui.button=function(label) return label=='Save config.ini' end")
@@ -4973,13 +7147,15 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(float(h.ini['HUD']['DIAL_SCALE']),1.3)
         self.assertEqual(h.ini['HUD']['UNITS'],'MPH')
         self.assertEqual(h.ini['HUD']['THEME'],'AMBER')
-        h.lua.execute("ui.slider=function(_,v) return v end;ui.button=function(label) return label=='Reset to defaults' end")
+        h.lua.execute("controlTab='HUD';ui.slider=function(_,v) return v end;ui.button=function(label) return controlID=='layout' and label=='Reset to defaults' end")
         h.lua.globals().script.windowMain()
-        self.assertEqual(h.saves,1) # Reset is a preview until Save
+        self.assertEqual(h.saves,1) # Opening confirmation does not save
+        h.lua.execute("ui.button=function(label) return controlID=='layout' and label=='Confirm reset' end;script.windowMain();controlTab='General'")
         h.lua.execute("ui.button=function(label) return label=='Save config.ini' end")
         h.lua.globals().script.windowMain()
         self.assertEqual(float(h.ini['HUD']['SCALE']),1)
-        self.assertEqual(h.ini['HUD']['UNITS'],'KMH')
+        self.assertEqual(h.ini['HUD']['UNITS'],'MPH')
+        self.assertAlmostEqual(float(h.ini['HUD']['DIAL_SCALE']),1.3)
     def test_region_scale_extremes_fit_and_offsets(self):
         for curve in (0,1.6):
             for scales in itertools.product((0.5,1.5),repeat=4):
@@ -5174,7 +7350,7 @@ class Version14Tests(unittest.TestCase):
 
     def test_release_flushes_pending_changes(self):
         h=Harness();h.frame()
-        h.lua.execute("ui.slider=function(label,v) if label=='HUD scale' then return 0.75 end return v end")
+        h.lua.execute("ui.slider=function(label,v) if label=='##hudScale' then return 75 end return v end")
         h.lua.globals().script.windowMain()
         self.assertEqual(h.saves,0)
         h.lua.globals().releaseCallback()
@@ -5211,7 +7387,7 @@ class Version14Tests(unittest.TestCase):
 
     def test_debounced_save_even_if_controls_closed_and_hud_disabled(self):
         h=Harness();h.frame()
-        h.lua.execute("ui.slider=function(label,v) if label=='HUD scale' then return 0.8 end return v end")
+        h.lua.execute("ui.slider=function(label,v) if label=='##hudScale' then return 80 end return v end")
         h.lua.globals().script.windowMain()
         h.frame(0.2);self.assertEqual(h.saves,0)
         # A later change restarts the debounce rather than writing every drag frame.
@@ -5224,8 +7400,8 @@ class Version14Tests(unittest.TestCase):
         h.frame(1);self.assertEqual(h.saves,1)
 
     def test_demo_profile_and_arc_persist_and_reload(self):
-        h=Harness(demo='AUTO');h.frame()
-        h.lua.execute("ui.checkbox=function(label) return label=='Force demo telemetry' or label=='Outer arc' or label=='Measure Lua CPU time' end")
+        h=Harness(demo='AUTO',overrides={'DEBUG_MODE':1});h.frame()
+        h.lua.execute("ui.checkbox=function(label) return label=='Force demo telemetry' or label=='Show outer arc' or label=='Measure Lua CPU time' end")
         h.lua.globals().script.windowMain();h.frame(0.41)
         self.assertEqual(h.ini['HUD']['DEMO'],'ON')
         self.assertEqual(h.ini['HUD']['PROFILE_CPU'],'1')
@@ -5236,16 +7412,17 @@ class Version14Tests(unittest.TestCase):
         h.lua.globals().remember=lambda label,value:states.update({label:value})
         h.lua.execute("ui.button=function() return false end;ui.checkbox=function(label,v) remember(label,v);return false end")
         h.lua.globals().script.windowMain()
-        self.assertTrue(states['Force demo telemetry']);self.assertTrue(states['Outer arc'])
+        self.assertTrue(states['Force demo telemetry']);self.assertTrue(states['Show outer arc'])
         self.assertTrue(states['Measure Lua CPU time'])
 
     def test_save_errors_are_visible_and_retried(self):
         h=Harness();h.frame()
-        h.lua.execute("ui.slider=function(label,v) if label=='HUD scale' then return 0.9 end return v end; py_ini_save=function() error('write failure fixture') end")
+        h.lua.execute("ui.slider=function(label,v) if label=='##hudScale' then return 90 end return v end; py_ini_save=function() error('write failure fixture') end")
         h.lua.globals().script.windowMain();h.frame(0.41)
         messages=[];h.lua.globals().ui.textWrapped=messages.append
         h.lua.globals().script.windowMain()
-        self.assertTrue(any('write failure fixture' in m for m in messages))
+        self.assertIn('Could not read or save config.ini.',messages)
+        self.assertFalse(any('write failure fixture' in m for m in messages))
         h.lua.globals().py_ini_save=h.ini_save
         h.frame(2.1);self.assertEqual(h.saves,1)
 
@@ -5313,6 +7490,64 @@ class CurvedGaugeTests(unittest.TestCase):
 
 ````
 
+## tests/test_zone_visibility.py
+
+````python
+from collections import Counter
+from itertools import product
+import json
+import unittest
+
+from headless import Harness
+
+
+KEYS = ('SHOW_LEFT_ZONE', 'SHOW_CENTER_ZONE', 'SHOW_RIGHT_ZONE')
+
+
+class ZoneVisibilityTests(unittest.TestCase):
+    def test_all_visibility_combinations_keep_other_geometry_fixed(self):
+        def draws(flags):
+            commands = Harness(overrides=dict(zip(KEYS, flags))).snapshot()
+            return Counter(map(json.dumps, commands))
+
+        zones = [draws(tuple(int(i == k) for i in range(3))) for k in range(3)]
+        for zone, texture in zip(zones, ('left_fill.png', 'dial_fill.png', 'right_fill.png')):
+            self.assertTrue(any(texture in command for command in zone))
+        self.assertTrue(any('curved_pedal_segments.png' in command for command in zones[1]))
+        self.assertTrue(any('battery.png' in command for command in zones[1]))
+        for flags in product((0, 1), repeat=3):
+            with self.subTest(flags=flags):
+                expected = sum((zone for on, zone in zip(flags, zones) if on), Counter())
+                self.assertEqual(draws(flags), expected)
+        arc = Harness(overrides={**dict.fromkeys(KEYS, 0), 'OUTER_ARC': 1})
+        self.assertEqual(len(arc.frame(0)), 96)
+
+    def test_control_applies_immediately_autosaves_and_resets(self):
+        h = Harness()
+        g = h.lua.globals()
+        h.frame(0)
+        h.lua.execute('''
+          controlTab='HUD'
+          ui.checkbox=function(label) return label:find('Left zone',1,true)==1 end
+          script.windowMain()
+        ''')
+        h.commands=[]
+        g.script.drawHUD()
+        self.assertFalse(any(c[0]=='assets/left_fill.png' for c in h.commands))
+        h.frame(.41)
+        self.assertEqual(h.ini['HUD']['SHOW_LEFT_ZONE'],'0')
+        h.lua.execute('''
+          ui.checkbox=function() return false end
+          ui.button=function(label) return controlID=='elements' and label=='Reset to defaults' end
+          script.windowMain()
+          ui.button=function(label) return controlID=='elements' and label=='Confirm reset' end
+          script.windowMain()
+        ''')
+        self.assertTrue(any(c[0]=='assets/left_fill.png' for c in h.frame(.41)))
+        self.assertTrue(all(h.ini['HUD'][key]=='1' for key in KEYS))
+
+````
+
 ## tests/verify_sdk.py
 
 ````python
@@ -5333,16 +7568,25 @@ def main():
     # INIConfig.load is nested, include explicitly rather than matching its prefix.
     calls.discard('ac.INIConfig')
     if 'ac.INIConfig.load(' in runtime: calls.add('ac.INIConfig.load')
+    for name in ('ac.AudioEvent.fromFile','ac.onSessionStart','ac.getTrackDataFilename','ac.getFolder',
+                 'ac.getTrackID','ac.log','io.load','io.fileExists','io.fileSize','io.scanDir'):
+        if name in runtime: calls.add(name)
     missing=[x for x in calls if not re.search(r'function\s+'+re.escape(x)+r'\s*\(',sdk)]
     assert not missing, 'Missing SDK calls: '+str(missing)
     for field in sorted(set(re.findall(r'\bcar\.([A-Za-z_]\w*)',runtime))):
         assert re.search(r'---@field '+re.escape(field)+r'\b',sdk),'Missing car field '+field
     for field in ('carsCount','currentSessionIndex','leaderboard','car','windowSize',
                   'raceSessionType','racePosition','isConnected','isActive',
-                  'appsHidden','uiHidden'):
+                  'appsHidden','uiHidden','wantCaptureMouse','isReplayOnlyMode','isReplayActive','isPaused',
+                  'focusedCar','trackLengthM','isSessionStarted','isInMainMenu','cameraInteriorMultiplier','cameraExteriorMultiplier',
+                  'cameraTrackMultiplier','volume'):
         assert re.search(r'---@field '+field+r'\b',sdk),'Missing state field '+field
+    for enum in ('ui.HoveredFlags.AnyWindow','ui.MouseCursor.ResizeAll'):
+        assert enum in sdk,'Missing UI enum '+enum
     for method in ('driverName','get','set','save'):
         assert re.search(r'function [\w_]+:'+method+r'\(',sdk),'Missing method '+method
+    for method in ('isValid','isPlaying','stop','start','dispose'):
+        assert re.search(r'function _ac_AudioEvent:'+method+r'\(',sdk),'Missing audio method '+method
     print('Verified calls: '+', '.join(sorted(calls)))
     print('Verified car fields and state/INI methods')
     print('SDK SHA256: '+hashlib.sha256(p.read_bytes()).hexdigest())

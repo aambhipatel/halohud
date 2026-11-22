@@ -1,6 +1,6 @@
 # HaloHUD for Assetto Corsa
 
-**Version 1.10.1 · Assetto Corsa + CSP · MIT**
+**Version 1.11.1 · Assetto Corsa + CSP · MIT**
 
 An unofficial, F1-inspired onboard telemetry overlay for Assetto Corsa. It draws a curved teal-and-navy HUD around the cockpit view using a CSP Lua app and original artwork.
 
@@ -47,9 +47,9 @@ Do not install `docs`, `source`, `tests` or previews into the game. The app does
 
 ### Position and configure the HUD
 
-Enable **Drag HUD with mouse**, then left-drag the handle above the dial. Turn the option off when finished. Overall scale, X/Y offsets, curvature and independent panel scales also update immediately from the controls window.
+With the in-game cursor visible, left-drag the HUD from its body. Double-click the HUD to reset its position. Turn on **General → Lock HUD position** to prevent both actions. The **HUD** tab also offers scale, offsets, curvature and individual panel scales. Under **HUD → Elements**, you can hide the leaderboard, center speedometer and gauges, or right aero/gear/RPM panel independently. The remaining zones stay in place.
 
-Edits auto-save to [config.ini](apps/lua/HaloHUD/config.ini) after 0.4 seconds without changes. **Save config.ini** writes immediately; **Reset to defaults** restores and saves defaults; **Reload config.ini** reads external edits.
+Edits auto-save to [config.ini](apps/lua/HaloHUD/config.ini) after 0.4 seconds without changes. For dragging, the timer starts when you release. **Save config.ini** writes immediately, and **Reload config.ini** reads external edits. Section resets ask for confirmation.
 
 For example, edit these keys in the existing `[HUD]` section, then reload:
 
@@ -65,7 +65,11 @@ Both speed units remain visible; `UNITS` selects the upper readout. See the [use
 
 ### Try demo mode
 
-In a session, enable **Force demo telemetry** to animate the gauges without driving. Turn it off to restore automatic live/no-car selection. You can also open [the standalone browser demo](previews/Demo.html) directly; it needs no local web server.
+In a session, turn on **General → Debug Mode**, then enable **Advanced → Diagnostics → Force demo telemetry** to animate the gauges without driving. Turn it off to restore automatic live/no-car selection. You can also open [the standalone browser demo](previews/Demo.html) directly; it needs no local web server.
+
+### Optional DRS chime
+
+Copy your own WAV into `<Assetto Corsa>/apps/lua/HaloHUD/sounds/`. The default filename is `drs_chime.wav`. Open **HaloHUD controls → DRS Chime**, enable the cue, and set the volume. The **Sound file** picker lists WAVs found at load. Use **Reload config.ini** after adding or replacing a file. Press **Test chime** to check playback. For logs and cue diagnostics, turn on **Debug Mode** in General, then **DRS debug logging** under Advanced → Diagnostics. Start with a 100–300 ms, 16-bit PCM mono WAV at 44.1 kHz with no leading silence. See the [DRS settings and audio notes](docs/USER-GUIDE.md#drs-entry-chime) for configuration and [in-game checks](docs/TESTING.md#drs-chime-manual-test-plan).
 
 ## Development
 
@@ -81,7 +85,7 @@ python -m venv ../halohud-venv
 ..\halohud-venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-The test harness executes Lua 5.1 through Lupa and mocks CSP interfaces. The current suite has 71 tests; it does not prove native mouse routing, engine integration or GPU performance.
+The test harness executes Lua 5.1 through Lupa and mocks CSP interfaces. The current suite has 86 tests; it does not prove native mouse routing, engine integration or GPU performance.
 
 ### Generate assets, previews and packages
 
@@ -148,7 +152,19 @@ The Formula Ultra profile uses available live powertrain data for the exact car 
 
 ## Changelog
 
-Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.10.1. Documentation and publishing changes are tracked separately.
+Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.11.1. Documentation and publishing changes are tracked separately.
+
+### 1.11.1 — DRS chime diagnostics
+
+- Added a debug-only **Test chime** button with file, WAV header and CSP playback diagnostics.
+- Logged every eligible live trigger with its playback result.
+- Kept the DRS check in the update loop even when **Show HUD** is turned off.
+
+### 1.11.0 — optional DRS zone cue
+
+- Added a player-only chime on eligible DRS availability transitions, with replay and pause suppression.
+- Detects track zones and learns free-use cars per session, with car-folder overrides and an edge-only fallback for tracks without zone data.
+- Added a WAV selector for your own files, volume control and debug diagnostics. Sound is off by default.
 
 ### 1.10.1 — leaderboard animation triggers
 

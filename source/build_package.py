@@ -14,6 +14,8 @@ EXCLUDED_DIRS={'.git','.venv','venv','__pycache__','.pytest_cache','.mypy_cache'
                '.vscode','.idea','htmlcov','dist','.release-tools'}
 def publishable(p):
     rel=p.relative_to(ROOT)
+    if rel.parts[:4]==('apps','lua','HaloHUD','sounds') and rel.parts[4:]!=('README.txt',):
+        return False
     return not any(part in EXCLUDED_DIRS for part in rel.parts) and not (
         p.name in {'.env','.coverage','.DS_Store','Thumbs.db','Desktop.ini'}
         or (p.name.startswith('.env.') and p.name!='.env.example')
