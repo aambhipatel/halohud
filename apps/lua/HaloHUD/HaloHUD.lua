@@ -1,4 +1,4 @@
--- HaloHUD for Assetto Corsa 1.11.1, original screen-space artwork. CSP 0.2.0+ (build 2651).
+-- HaloHUD for Assetto Corsa 1.12.0, original screen-space artwork. CSP 0.2.0+ (build 2651).
 -- Required UI/telemetry calls were checked against the shipped 0.2.0 SDK.
 local Telemetry=require('telemetry')
 local Settings=require('settings')

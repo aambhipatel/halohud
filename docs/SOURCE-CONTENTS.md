@@ -1266,7 +1266,7 @@ return {["labels"]={["texture"]="assets/labels.png",["cap"]=52,["glyphs"]={["32"
 ## apps/lua/HaloHUD/HaloHUD.lua
 
 ````lua
--- HaloHUD for Assetto Corsa 1.11.1, original screen-space artwork. CSP 0.2.0+ (build 2651).
+-- HaloHUD for Assetto Corsa 1.12.0, original screen-space artwork. CSP 0.2.0+ (build 2651).
 -- Required UI/telemetry calls were checked against the shipped 0.2.0 SDK.
 local Telemetry=require('telemetry')
 local Settings=require('settings')
@@ -2023,7 +2023,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 [ABOUT]
 NAME = HaloHUD for Assetto Corsa
 AUTHOR = HaloHUD contributors
-VERSION = 1.11.1
+VERSION = 1.12.0
 DESCRIPTION = Unofficial, F1-inspired onboard telemetry overlay for Assetto Corsa.
 REQUIRED_VERSION = 2651
 

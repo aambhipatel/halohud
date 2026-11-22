@@ -1,6 +1,6 @@
 # HaloHUD for Assetto Corsa
 
-**Version 1.11.1 · Assetto Corsa + CSP · MIT**
+**Version 1.12.0 · Assetto Corsa + CSP · MIT**
 
 An unofficial, F1-inspired onboard telemetry overlay for Assetto Corsa. It draws a curved teal-and-navy HUD around the cockpit view using a CSP Lua app and original artwork.
 
@@ -152,7 +152,13 @@ The Formula Ultra profile uses available live powertrain data for the exact car 
 
 ## Changelog
 
-Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.11.1. Documentation and publishing changes are tracked separately.
+Entries follow the development history. Dates are omitted where a release date was not recorded. The current app manifest is 1.12.0. Documentation and publishing changes are tracked separately.
+
+### 1.12.0 — Independent HUD zone visibility
+
+- Added separate visibility switches for the leaderboard, center speedometer and gauges, and right powertrain panel.
+- Added direct HUD dragging, a position lock, and double-click to reset the offsets.
+- Redesigned the controls and added a Debug Mode that preserves saved diagnostics and car overrides.
 
 ### 1.11.1 — DRS chime diagnostics
 
